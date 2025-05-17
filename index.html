@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AlphaRevolve Run Explorer</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <style>
+        /* General Styles */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #000; /* Solid black background for binary look */
+            color: #fff;
+            overflow-x: hidden; /* Prevent horizontal scroll */
+        }
+
+        /* Performance metrics styles */
+        .metric-card {
+            transition: background-color 0.2s ease;
+        }
+
+        .metric-card:hover {
+            background-color: #252525 !important;
+        }
+
+        details summary {
+            transition: color 0.2s ease;
+        }
+
+        details summary:hover {
+            color: #0f0;
+        }
+
+        .program-header {
+            transition: all 0.3s ease;
+        }
+
+        .program-header:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+            border-color: #555;
+        }
+
+        .container {
+            width: 95%;
+            max-width: 1400px;
+            margin: 10px auto;
+            background-color: #111; /* Solid dark background */
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+            border: 1px solid #333;
+        }
+
+        h1 {
+            text-align: center;
+            color: #fff;
+            margin-bottom: 15px;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7);
+            text-transform: uppercase;
+        }
+
+        /* File Input */
+        #code, #feedback {
+            font-family: 'Courier New', monospace;
+            background-color: rgba(0, 0, 0, 0.1);
+            padding: 15px;
+            border-radius: var(--radius-md);
+            white-space: pre-wrap; /* Allow text to wrap while preserving whitespace */
+            overflow-wrap: break-word; /* Break words if needed to prevent overflow */
+            word-break: break-word; /* For better wrapping of long words */
+            color: var(--text-primary);
+            border: 1px solid var(--border-light);
+            box-shadow: var(--shadow-inset);
+            max-width: 100%; /* Ensure content stays within container */
+        }
+
+        #fileInput:hover {
+            background-color: #0056b3;
+        }
+        #metadata {
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 20px;
+            border-radius: 10px;
+            background-color: rgba(255, 255, 255, 0.05);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+        }
+
+        h1, h2, h3 {
+            margin-top: 0;
+        }
+
+        #metadataContent p {
+            line-height: 1.6;
+            color: #eee;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Program List Section */
+        #programList {
+            list-style: none;
+            padding: 0;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .programItem {
+            border: 1px solid #333;
+            margin-bottom: 4px;
+            padding: 6px 8px;
+            border-radius: 4px;
+            background-color: #1a1a1a;
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+            transform: translateY(0);
+            font-size: 12px;
+        }
+
+        .programItem:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        .programItem h3 {
+            margin-top: 0;
+            color: #fff;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        .programItem p {
+            line-height: 1.6;
+            color: #eee;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Program Details Section */
+        #programDetails {
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 20px;
+            border-radius: 10px;
+            background-color: rgba(255, 255, 255, 0.05);
+            margin-top: 30px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+        }
+
+        #programDetails h2 {
+            margin-top: 0;
+            color: #fff;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        #programDetailsContent p {
+            line-height: 1.6;
+            color: #eee;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        #code, #feedback {
+            font-family: 'Courier New', monospace;
+            :root {
+                --bg-primary: #000;
+                --bg-secondary: #111;
+                --bg-tertiary: #1a1a1a;
+                --bg-hover: #2a2a2a;
+
+                --text-primary: #fff;
+                --text-secondary: #eee;
+                --text-muted: #888;
+
+                --border-light: rgba(255, 255, 255, 0.2);
+                --border-dark: #333;
+
+                --accent-color: #00ff00;
+                --danger-color: #a00;
+                --success-color: #0a0;
+
+                /* Simplified shadows for better performance */
+                --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+                --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.3);
+                --shadow-lg: 0 2px 5px rgba(0, 0, 0, 0.5);
+                --shadow-inset: inset 0 1px 3px rgba(0, 0, 0, 0.3);
+
+                --radius-sm: 3px;
+                --radius-md: 5px;
+                --radius-lg: 8px;
+
+                --font-size-xs: 11px;
+                --font-size-sm: 12px;
+                --font-size-md: 14px;
+                --font-size-lg: 16px;
+                --font-size-xl: 18px;
+            }
+        }
+
+        #statisticsContent {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .statisticItem {
+            padding: 15px;
+            border-radius: 8px;
+            background-color: rgba(0, 0, 0, 0.1);
+            text-align: center;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+        }
+
+        .statisticItem h3 {
+            margin-top: 0;
+            color: #fff;
+            font-size: 1.2em;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        .statisticItem p {
+            line-height: 1.4;
+            color: #eee;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+        }
+        /* Layout Styles */
+        .main-content {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .primary-section {
+            flex: 3;
+            min-width: 60%;
+        }
+
+        .secondary-section {
+            flex: 1;
+            min-width: 250px;
+        }
+
+        /* Programs List - reduced prominence */
+        .program-list-container {
+            margin-top: 15px;
+            font-size: 11px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .program-list-container h2 {
+            font-size: 14px;
+            margin-bottom: 8px;
+            color: #888;
+        }
+
+        #programList {
+            display: block;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+
+        /* More compact program list */
+        .programItem {
+            border: 1px solid var(--border-dark);
+            margin-bottom: 3px;
+            padding: 4px 6px;
+            border-radius: var(--radius-sm);
+            background-color: var(--bg-tertiary);
+            cursor: pointer;
+            font-size: var(--font-size-xs);
+        }
+
+        .programItem:hover {
+            background-color: var(--bg-hover);
+        }
+            box-shadow: none;
+        }
+        /* Tree View Styles - Enhanced */
+        #treeContainer {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #444;
+            border-radius: 8px;
+            background-color: #151515;
+            font-size: 13px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+
+        #treeContainer h2 {
+            font-size: var(--font-size-xl);
+            text-transform: uppercase;
+            color: var(--accent-color);
+            margin-bottom: 15px;
+        }
+
+        #treeView {
+            padding: 10px;
+            overflow-x: auto;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        #treeView ul {
+            list-style-type: none;
+            padding-left: 25px;
+            margin: 0;
+        }
+
+        #treeView li {
+            margin: 8px 0;
+            position: relative;
+            padding-left: 20px;
+        }
+
+        #treeView li::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 13px;
+            width: 15px;
+            height: 2px;
+            background: #444;
+        }
+
+        #treeView li::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            width: 2px;
+            background: #333;
+            transform: translateY(-50%);
+            z-index: 0;
+        }
+
+        #treeView li:last-child::after {
+            height: 13px;
+        }
+
+        #treeView a {
+            display: inline-block;
+            padding: 6px 10px;
+            background-color: #222;
+            border: 1px solid #444;
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            text-decoration: none;
+            position: relative;
+            z-index: 1;
+        }
+
+        #treeView a:hover {
+            background-color: var(--bg-hover);
+        }
+
+        #treeView a.improved {
+            background-color: rgba(0, 128, 0, 0.3);
+            border-color: #0a0;
+        }
+
+        #treeView a.degraded {
+            background-color: rgba(128, 0, 0, 0.3);
+            border-color: #a00;
+        }
+
+        #treeView a.best {
+            background-color: rgba(0, 200, 0, 0.4);
+            border-color: var(--accent-color);
+        }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-chart-line"></i> AlphaRevolve Run Explorer</h1>
+            <input type="file" id="fileInput" accept=".json" title="Select a run file to analyze">
+        </header>
+
+        <main class="main-content">
+            <section class="primary-section">
+                <div id="treeContainer" class="card">
+                    <h2><i class="fas fa-sitemap"></i> Program Evolution Tree</h2>
+                    <div id="treeView" aria-label="Program evolution visualization">
+                        <!-- Tree will be rendered here -->
+                        <p class="placeholder">Load a run file to view the evolution tree.</p>
+                    </div>
+                </div>
+
+                <div id="programDetails" class="card">
+                    <h2><i class="fas fa-file-code"></i> Program Details</h2>
+                    <div id="programDetailsContent">
+                        <p>Select a program from the tree to view details.</p>
+                    </div>
+                </div>
+            </section>
+
+            <aside class="secondary-section">
+                <div id="metadata" class="card">
+                    <h2><i class="fas fa-info-circle"></i> Run Metadata</h2>
+                    <div id="metadataContent">
+                        <p class="placeholder">Load a run file to view metadata.</p>
+                    </div>
+                </div>
+
+                <div id="statistics" class="card">
+                    <h2><i class="fas fa-chart-bar"></i> Run Statistics</h2>
+                    <div id="statisticsContent">
+                        <p class="placeholder">Load a run file to view statistics.</p>
+                    </div>
+                </div>
+
+                <div class="program-list-container card">
+                    <h2><i class="fas fa-code"></i> Programs List</h2>
+                    <ul id="programList" aria-label="List of all programs in run">
+                        <!-- Programs list will be rendered here -->
+                    </ul>
+                </div>
+            </aside>
+        </main>
+
+        <footer>
+            <p class="text-center text-muted">AlphaRevolve Run Explorer - Visualize Program Evolution</p>
+        </footer>
+    </div>
+
+    <script>
+        /**
+         * AlphaRevolve Run Explorer
+         * Script for visualizing and exploring evolutionary program runs
+         */
+        (function() {
+            // Application state
+            const app = {
+                programMapping: {}, // Map of program IDs to program objects
+                bestProgram: null,  // Reference to the best program in the run
+                currentProgram: null // Currently selected program
+            };
+
+            // Initialize the application
+            function init() {
+                document.getElementById('fileInput').addEventListener('change', loadFile);
+            }
+
+            /**
+             * Load and parse a JSON file
+             */
+            function loadFile(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const data = JSON.parse(e.target.result);
+                        processAndDisplayData(data);
+                    } catch (error) {
+                        alert('Error parsing JSON file.');
+                        console.error('JSON parsing error:', error);
+                    }
+                };
+                reader.readAsText(file);
+            }
+
+            /**
+             * Process and display the run data
+             */
+            function processAndDisplayData(data) {
+                console.log(`Processing run with ${data.programs.length} programs`);
+
+                // Process programs (normalize IDs and calculate improvements)
+                processPrograms(data.programs);
+
+                // Find the best program
+                app.bestProgram = findBestProgram(data.programs);
+
+                // Display all sections
+                displayMetadata(data);
+                displayPrograms(data.programs);
+                displayStatistics(data);
+
+                // Build and display the evolution tree
+                const treeHTML = buildEvolutionTree(data.programs);
+                document.getElementById('treeView').innerHTML = treeHTML;
+            }
+
+            /**
+             * Process programs to normalize IDs and calculate improvement metrics
+             */
+            function processPrograms(programs) {
+                // Reset program mapping
+                app.programMapping = {};
+
+                // Normalize program IDs and calculate improvements
+                programs.forEach(program => {
+                    // Normalize IDs
+                    program.id = normalizeId(program.id);
+                    if (program.parent) {
+                        program.parent = normalizeId(program.parent);
+                    }
+
+                    // Add to mapping
+                    app.programMapping[program.id] = program;
+                });
+
+                // Calculate improvement scores in a second pass
+                programs.forEach(program => {
+                    if (program.parent && app.programMapping[program.parent]) {
+                        const parent = app.programMapping[program.parent];
+                        const scoreDiff = program.fitness.finalScore - parent.fitness.finalScore;
+                        program.improved = scoreDiff > 0;
+                        program.degraded = scoreDiff < 0;
+                    } else {
+                        program.improved = false;
+                        program.degraded = false;
+                    }
+                });
+            }
+
+            /**
+             * Normalize an ID by trimming whitespace and removing quotes
+             */
+            function normalizeId(id) {
+                return String(id).trim().replace(/['"]/g, '');
+            }
+
+            /**
+             * Find the program with the highest fitness score
+             */
+            function findBestProgram(programs) {
+                return programs.reduce((best, current) =>
+                    current.fitness.finalScore > best.fitness.finalScore ? current : best, programs[0]);
+            }
+
+            /**
+             * Display a program from the tree or list
+             */
+            function displayProgram(id) {
+                const program = app.programMapping[id];
+                if (program) {
+                    app.currentProgram = program;
+                    renderProgramDetails(program);
+                    document.getElementById('programDetails').scrollIntoView();
+                } else {
+                    console.warn(`Program not found for id: ${id}`);
+                }
+            }
+
+            /**
+             * Display metadata about the run
+             */
+            function displayMetadata(data) {
+                const metadataContent = document.getElementById('metadataContent');
+                metadataContent.innerHTML = `
+                    <p><i class="fas fa-tag"></i> <strong>Version:</strong> ${data.version}</p>
+                    <p><i class="fas fa-clock"></i> <strong>Timestamp:</strong> ${data.timestamp}</p>
+                    <p><i class="fas fa-book"></i> <strong>Problem Description:</strong> ${data.metadata?.problemDescription || 'N/A'}</p>
+                    <p><i class="fas fa-cog"></i> <strong>Iterations:</strong> ${data.metadata?.config?.iterations || 'N/A'}</p>
+                    <p><i class="fas fa-robot"></i> <strong>LLM Model:</strong> ${data.metadata?.config?.llmModel || 'N/A'}</p>
+                    <p><i class="fas fa-comment"></i> <strong>Feedback Enabled:</strong> ${data.metadata?.config?.feedbackEnabled || 'N/A'}</p>
+                    <p><i class="fas fa-brain"></i> <strong>Feedback LLM Model:</strong> ${data.metadata?.config?.feedbackLlmModel || 'N/A'}</p>
+                    <p><i class="fas fa-stopwatch"></i> <strong>Runtime:</strong> ${data.metadata?.runtime || 'N/A'} ms</p>
+                `;
+            }
+
+            /**
+             * Display the compact program list
+             */
+            function displayPrograms(programs) {
+                const programList = document.getElementById('programList');
+                programList.innerHTML = '';
+
+                programs.forEach(program => {
+                    const listItem = document.createElement('li');
+                    listItem.classList.add('programItem');
+
+                    // Create program status icon
+                    let scoreIcon = getStatusIcon(program);
+
+                    listItem.innerHTML = `
+                        <div>
+                            <strong>Iter ${program.iteration}</strong>
+                            ${scoreIcon}
+                            <span style="float:right">${program.fitness.finalScore.toFixed(2)}</span>
+                        </div>
+                    `;
+                    listItem.addEventListener('click', () => displayProgram(program.id));
+                    programList.appendChild(listItem);
+                });
+            }
+
+            /**
+             * Get a status icon based on program improvement
+             */
+            function getStatusIcon(program) {
+                if (app.bestProgram && program.id === app.bestProgram.id) {
+                    return '<i class="fas fa-trophy" style="color:#0f0"></i>';
+                } else if (program.improved) {
+                    return '<i class="fas fa-arrow-up" style="color:#0f0"></i>';
+                } else if (program.degraded) {
+                    return '<i class="fas fa-arrow-down" style="color:#f00"></i>';
+                }
+                return '';
+            }
+
+            /**
+             * Render program details in the details section
+             */
+            function renderProgramDetails(program) {
+                const programDetailsContent = document.getElementById('programDetailsContent');
+
+                // Create compact header with program info
+                const headerHtml = `
+                    <div class="program-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #444; padding-bottom:10px;">
+                        <div>
+                            <h2 style="margin:0; display:inline-block;">
+                                <i class="fas fa-file-code"></i> Iteration ${program.iteration}
+                                ${program.id === app.bestProgram?.id ? '<span style="color:#0f0; margin-left:8px;"><i class="fas fa-trophy"></i> BEST</span>' : ''}
+                            </h2>
+                            <div style="margin-top:5px; font-size:12px; color:#aaa;">
+                                ID: ${program.id.substring(0,8)}... ${program.parent ? `| Parent: ${program.parent.substring(0,8)}...` : ''}
+                            </div>
+                        </div>
+                        <div style="text-align:right; padding:5px; border-radius:5px; background:rgba(0,0,0,0.2);">
+                            <div style="display:flex; gap:15px; font-size:13px;">
+                                <div title="Quality Score">
+                                    <i class="fas fa-check-circle"></i> Quality
+                                    <div style="font-size:14px; font-weight:bold;">${program.fitness.qualityScore.toFixed(4)}</div>
+                                </div>
+                                <div title="Efficiency Score">
+                                    <i class="fas fa-tachometer-alt"></i> Efficiency
+                                    <div style="font-size:14px; font-weight:bold;">${program.fitness.efficiencyScore.toFixed(4)}</div>
+                                </div>
+                                <div title="Final Score" style="color:${program.id === app.bestProgram?.id ? '#0f0' : '#fff'}">
+                                    <i class="fas fa-star"></i> Final
+                                    <div style="font-size:16px; font-weight:bold;">${program.fitness.finalScore.toFixed(4)}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                // Generate performance metrics HTML if available
+                let performanceMetricsHtml = '';
+                if (program.fitness.performanceMetrics) {
+                    const metrics = program.fitness.performanceMetrics;
+                    try {
+                        // Format metrics with appropriate units
+                        const executionTimeMs = metrics.executionTime?.toFixed(2) || 'N/A';
+                        const heapUsedMB = metrics.memoryUsage?.delta?.heapUsed
+                            ? (metrics.memoryUsage.delta.heapUsed / (1024 * 1024)).toFixed(2)
+                            : 'N/A';
+                        const heapTotalMB = metrics.memoryUsage?.delta?.heapTotal
+                            ? (metrics.memoryUsage.delta.heapTotal / (1024 * 1024)).toFixed(2)
+                            : 'N/A';
+                        const rssMB = metrics.memoryUsage?.delta?.rss
+                            ? (metrics.memoryUsage.delta.rss / (1024 * 1024)).toFixed(2)
+                            : 'N/A';
+                        const userCPUms = metrics.cpuUsage?.user
+                            ? (metrics.cpuUsage.user / 1000).toFixed(2)
+                            : 'N/A';
+                        const systemCPUms = metrics.cpuUsage?.system
+                            ? (metrics.cpuUsage.system / 1000).toFixed(2)
+                            : 'N/A';
+                        const gcCount = metrics.gcStats?.count || 'N/A';
+                        const gcTime = metrics.gcStats?.totalTime?.toFixed(2) || 'N/A';
+
+                        performanceMetricsHtml = `
+                            <details style="margin-bottom:20px; background:#111; border:1px solid #333; border-radius:5px; padding:10px;">
+                                <summary style="cursor:pointer; font-weight:bold;">
+                                    <i class="fas fa-chart-line"></i> Performance Metrics
+                                </summary>
+                                <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:15px; padding:10px; margin-top:10px;">
+                                    <div class="metric-card" style="background:#1a1a1a; padding:10px; border-radius:5px;">
+                                        <h4 style="margin:0 0 8px 0;"><i class="fas fa-stopwatch"></i> Execution</h4>
+                                        <div>Time: <strong>${executionTimeMs} ms</strong></div>
+                                    </div>
+                                    <div class="metric-card" style="background:#1a1a1a; padding:10px; border-radius:5px;">
+                                        <h4 style="margin:0 0 8px 0;"><i class="fas fa-memory"></i> Memory</h4>
+                                        <div>Heap Used: <strong>${heapUsedMB} MB</strong></div>
+                                        <div>Heap Total: <strong>${heapTotalMB} MB</strong></div>
+                                        <div>RSS: <strong>${rssMB} MB</strong></div>
+                                    </div>
+                                    <div class="metric-card" style="background:#1a1a1a; padding:10px; border-radius:5px;">
+                                        <h4 style="margin:0 0 8px 0;"><i class="fas fa-microchip"></i> CPU</h4>
+                                        <div>User Time: <strong>${userCPUms} ms</strong></div>
+                                        <div>System Time: <strong>${systemCPUms} ms</strong></div>
+                                    </div>
+                                    <div class="metric-card" style="background:#1a1a1a; padding:10px; border-radius:5px;">
+                                        <h4 style="margin:0 0 8px 0;"><i class="fas fa-recycle"></i> Garbage Collection</h4>
+                                        <div>Count: <strong>${gcCount}</strong></div>
+                                        <div>Total Time: <strong>${gcTime} ms</strong></div>
+                                    </div>
+                                </div>
+                            </details>
+                        `;
+                    } catch (error) {
+                        console.error('Error formatting performance metrics:', error);
+                        performanceMetricsHtml = `
+                            <div style="margin-bottom:20px; color:#f55;">
+                                <i class="fas fa-exclamation-triangle"></i> Error formatting performance metrics: ${error}
+                            </div>
+                        `;
+                    }
+                }
+
+                // Assemble the full content
+                programDetailsContent.innerHTML = `
+                    ${headerHtml}
+                    ${performanceMetricsHtml}
+                    <h3><i class="fas fa-terminal"></i> Code</h3>
+                    <pre id="code">${program.solution}</pre>
+                    ${program.feedback ? `<div class="feedback"><h3><i class="fas fa-comment-dots"></i> Feedback</h3><pre id="feedback">${program.feedback}</pre></div>` : ''}
+                `;
+            }
+
+            /**
+             * Build the evolution tree visualization
+             */
+            function buildEvolutionTree(programs) {
+                // Build a mapping of program ID to node (with children)
+                const nodes = buildTreeNodes(programs);
+                const roots = findRootNodes(nodes, programs);
+
+                // Sort children by iteration
+                sortTreeNodes(nodes);
+
+                // Render the tree HTML
+                return renderTreeHtml(roots);
+            }
+
+            /**
+             * Build tree nodes with parent-child relationships
+             */
+            function buildTreeNodes(programs) {
+                const nodes = {};
+
+                // Create nodes
+                programs.forEach(program => {
+                    nodes[program.id] = Object.assign({}, program, { children: [] });
+                });
+
+                // Build parent-child relationships
+                programs.forEach(program => {
+                    if (program.parent && nodes[program.parent]) {
+                        nodes[program.parent].children.push(nodes[program.id]);
+                    }
+                });
+
+                return nodes;
+            }
+
+            /**
+             * Find root nodes (programs without parents or with missing parents)
+             */
+            function findRootNodes(nodes, programs) {
+                const roots = [];
+
+                programs.forEach(program => {
+                    if (!program.parent || !nodes[program.parent]) {
+                        if (program.parent && !nodes[program.parent]) {
+                            console.warn(`Parent ID not found: ${program.id} -> ${program.parent}`);
+                        }
+                        roots.push(nodes[program.id]);
+                    }
+                });
+
+                return roots;
+            }
+
+            /**
+             * Sort tree nodes by iteration
+             */
+            function sortTreeNodes(nodes) {
+                Object.values(nodes).forEach(node => {
+                    if (node.children.length > 0) {
+                        node.children.sort((a, b) => a.iteration - b.iteration);
+                    }
+                });
+            }
+
+            /**
+             * Recursively render the tree as HTML
+             */
+            function renderTreeHtml(nodes) {
+                if (!nodes.length) return '';
+
+                let html = '<ul>';
+                nodes.forEach(node => {
+                    html += '<li>';
+
+                    // Determine node class based on improvement/degradation
+                    let nodeClass = getNodeClass(node);
+
+                    // Make the node clickable
+                    html += `<a href="#" class="${nodeClass}" onclick="displayTreeProgram('${node.id}'); return false;" data-id="${node.id}">`;
+
+                    // Add appropriate icon
+                    html += getNodeIcon(node);
+
+                    // Add iteration and score
+                    html += `Iteration ${node.iteration}`;
+                    html += ` <span class="score">(${node.fitness.finalScore.toFixed(2)})</span>`;
+                    html += '</a>';
+
+                    // Recursively render children
+                    html += renderTreeHtml(node.children);
+                    html += '</li>';
+                });
+                html += '</ul>';
+
+                return html;
+            }
+
+            /**
+             * Get appropriate CSS class for a tree node
+             */
+            function getNodeClass(node) {
+                if (app.bestProgram && node.id === app.bestProgram.id) {
+                    return 'best';
+                } else if (node.improved) {
+                    return 'improved';
+                } else if (node.degraded) {
+                    return 'degraded';
+                }
+                return '';
+            }
+
+            /**
+             * Get appropriate icon HTML for a tree node
+             */
+            function getNodeIcon(node) {
+                if (app.bestProgram && node.id === app.bestProgram.id) {
+                    return '<i class="fas fa-trophy"></i> ';
+                } else if (node.improved) {
+                    return '<i class="fas fa-arrow-up"></i> ';
+                } else if (node.degraded) {
+                    return '<i class="fas fa-arrow-down"></i> ';
+                }
+                return '';
+            }
+
+            /**
+             * Display program statistics
+             */
+            function displayStatistics(data) {
+                const statisticsContent = document.getElementById('statisticsContent');
+                const programs = data.programs;
+
+                if (!programs || programs.length === 0) {
+                    statisticsContent.innerHTML = '<p>No programs available to calculate statistics.</p>';
+                    return;
+                }
+
+                const bestProgram = app.bestProgram;
+                const worstProgram = programs.reduce((worst, current) =>
+                    current.fitness.finalScore < worst.fitness.finalScore ? current : worst, programs[0]
+                );
+
+                // Calculate average scores
+                const scores = calculateAverageScores(programs);
+
+                // Performance metrics for best program
+                let performanceHtml = '';
+                if (bestProgram.fitness.performanceMetrics) {
+                    try {
+                        const metrics = bestProgram.fitness.performanceMetrics;
+                        const executionTimeMs = metrics.executionTime?.toFixed(2) || 'N/A';
+                        const heapUsedMB = metrics.memoryUsage?.delta?.heapUsed
+                            ? (metrics.memoryUsage.delta.heapUsed / (1024 * 1024)).toFixed(2)
+                            : 'N/A';
+                        const gcCount = metrics.gcStats?.count || 'N/A';
+
+                        performanceHtml = `
+                            <div class="statisticItem">
+                                <h3><i class="fas fa-chart-line"></i> Best Performance</h3>
+                                <p><i class="fas fa-stopwatch"></i> Time: ${executionTimeMs} ms</p>
+                                <p><i class="fas fa-memory"></i> Memory: ${heapUsedMB} MB</p>
+                                <p><i class="fas fa-recycle"></i> GC Count: ${gcCount}</p>
+                            </div>
+                        `;
+                    } catch (error) {
+                        console.error('Error formatting performance statistics:', error);
+                    }
+                }
+
+                statisticsContent.innerHTML = `
+                    <div class="statisticItem">
+                        <h3><i class="fas fa-trophy"></i> Best Program</h3>
+                        <p><i class="fas fa-star"></i> Final: ${bestProgram.fitness.finalScore.toFixed(4)}</p>
+                        <p><i class="fas fa-code-branch"></i> Iteration: ${bestProgram.iteration}</p>
+                        <p><a href="#" onclick="displayTreeProgram('${bestProgram.id}'); return false;">View Best</a></p>
+                    </div>
+                    <div class="statisticItem">
+                        <h3><i class="fas fa-thumbs-down"></i> Worst Program</h3>
+                        <p><i class="fas fa-star"></i> Final: ${worstProgram.fitness.finalScore.toFixed(4)}</p>
+                        <p><i class="fas fa-code-branch"></i> Iteration: ${worstProgram.iteration}</p>
+                    </div>
+                    <div class="statisticItem">
+                        <h3><i class="fas fa-calculator"></i> Average Scores</h3>
+                        <p><i class="fas fa-check-circle"></i> Quality: ${scores.quality.toFixed(4)}</p>
+                        <p><i class="fas fa-tachometer-alt"></i> Efficiency: ${scores.efficiency.toFixed(4)}</p>
+                        <p><i class="fas fa-star"></i> Final: ${scores.final.toFixed(4)}</p>
+                    </div>
+                    ${performanceHtml}
+                `;
+            }
+
+            /**
+             * Calculate average scores for all programs
+             */
+            function calculateAverageScores(programs) {
+                const totalQuality = programs.reduce((sum, program) => sum + program.fitness.qualityScore, 0);
+                const totalEfficiency = programs.reduce((sum, program) => sum + program.fitness.efficiencyScore, 0);
+                const totalFinal = programs.reduce((sum, program) => sum + program.fitness.finalScore, 0);
+                const count = programs.length;
+
+                return {
+                    quality: totalQuality / count,
+                    efficiency: totalEfficiency / count,
+                    final: totalFinal / count
+                };
+            }
+
+            // Initialize the app
+            init();
+
+            // Expose public functions
+            window.displayTreeProgram = displayProgram;
+        })();
+    </script>
+</body>
+</html>

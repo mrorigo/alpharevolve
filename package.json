@@ -1,0 +1,23 @@
+{
+  "name": "alphaevolve",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "scripts": {
+    "example1": "ts-node src/example1.ts",
+    "example2": "ts-node src/example2.ts",
+    "build": "tsc",
+    "test": "echo \"No tests specified yet\" && exit 1"
+  },
+  "keywords": ["AI", "evolution", "refactoring", "code optimization"],
+  "author": "Elite Dev Team",
+  "license": "ISC",
+  "dependencies": {
+    "@types/node": "^22.15.18",
+    "openai": "^4.98.0"
+  },
+  "devDependencies": {
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  },
+  "description": "AlphaEvolve: An AI-powered evolutionary code optimizer."
+}

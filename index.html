@@ -709,9 +709,28 @@
                 programDetailsContent.innerHTML = `
                     ${headerHtml}
                     ${performanceMetricsHtml}
+                    ${program.generationPrompt ? `
+                        <details style="margin-bottom:20px; background:#111; border:1px solid #333; border-radius:5px; padding:10px;">
+                            <summary style="cursor:pointer; font-weight:bold;">
+                                <i class="fas fa-terminal"></i> Code Generation Prompt
+                            </summary>
+                            <pre style="margin-top:10px; background:#1a1a1a; padding:10px; border-radius:5px; overflow-x:auto;">${program.generationPrompt}</pre>
+                        </details>
+                    ` : ''}
                     <h3><i class="fas fa-terminal"></i> Code</h3>
                     <pre id="code">${program.solution}</pre>
-                    ${program.feedback ? `<div class="feedback"><h3><i class="fas fa-comment-dots"></i> Feedback</h3><pre id="feedback">${program.feedback}</pre></div>` : ''}
+                    ${program.feedback ? `
+                        <details style="margin-bottom:20px; background:#111; border:1px solid #333; border-radius:5px; padding:10px;">
+                            <summary style="cursor:pointer; font-weight:bold;">
+                                <i class="fas fa-comment-dots"></i> Feedback Prompt
+                            </summary>
+                            <pre style="margin-top:10px; background:#1a1a1a; padding:10px; border-radius:5px; overflow-x:auto;">${program.feedbackPrompt || 'N/A'}</pre>
+                        </details>
+                        <div class="feedback">
+                            <h3><i class="fas fa-comment-dots"></i> Feedback</h3>
+                            <pre id="feedback">${program.feedback}</pre>
+                        </div>
+                    ` : ''}
                 `;
             }
 

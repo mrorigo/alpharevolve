@@ -6,6 +6,8 @@ import { CodeExtractor } from './CodeExtractor';
 import { FeedbackService } from './FeedbackService';
 import * as path from 'path';
 import * as fs from 'fs';
+import chalk from 'chalk';
+import { ConsoleDisplay } from './ConsoleDisplay';
 
 /**
  * AlphaRevolve orchestrates evolutionary optimization of candidate solutions using LLMs.
@@ -18,6 +20,7 @@ export class AlphaRevolve {
   private readonly evaluationDatabase: ProgramDatabase;
   private readonly options: EvolutionOptions;
   private readonly runId: string;
+  private readonly display: ConsoleDisplay;
 
   /**
    * Creates a timestamp-based unique identifier
@@ -76,6 +79,7 @@ export class AlphaRevolve {
 
     // Initialize database with metadata
     this.initializeDatabase();
+    this.display = new ConsoleDisplay();
   }
 
   /**
@@ -209,10 +213,10 @@ export class AlphaRevolve {
       const prompt = PromptBuilder.buildPrompt(this.config, this.evaluationDatabase);
 
       if (this.options.verbose) {
-        // Log a preview of the prompt
-        const previewLines = prompt.split('\n').slice(0, 50);
+        this.display.displaySection('Prompt Preview');
+        const previewLines = prompt.split('\n').slice(0, 10); // Show the first 10 lines of the prompt
         const preview = previewLines.join('\n') + (prompt.split('\n').length > 10 ? '\n...' : '');
-        console.log(`Prompt preview:\n${preview}`);
+        console.log(preview);
       }
 
       // Generate a new solution with the LLM
@@ -227,11 +231,15 @@ export class AlphaRevolve {
         this.config.maxTokens
       );
 
-      // Extract code from the LLM response
-      if (this.options.verbose) {
-        console.log('📝 Extracting solution...');
-      }
+      // Display a structured preview of the LLM response
+      this.display.displaySection('LLM Response Preview');
+      const responseLines = generatedText.split('\n');
+      const previewLines = responseLines.slice(0, 10); // Show the first 10 lines of the response
+      const preview = previewLines.join('\n') + (responseLines.length > 10 ? '\n...' : '');
+      console.log(preview);
+      console.log(chalk.yellow(`Response Length: ${responseLines.length} lines`));
 
+      // Extract code from the LLM response
       const childSolution = CodeExtractor.extractSolution(generatedText);
 
       // Validate solution has actual code content
@@ -259,30 +267,30 @@ export class AlphaRevolve {
 
       const childFitness = await this.config.fitnessFunction(childSolution);
 
-      if (this.options.verbose) {
-        console.log(`📊 Child fitness: ${JSON.stringify(childFitness)}`);
-
-        // Calculate and log improvement metrics
-        const improvement = childFitness.finalScore - parentCandidate.fitness.finalScore;
-        const denominator = Math.abs(parentCandidate.fitness.finalScore) < 0.001 ? 0.001 : Math.abs(parentCandidate.fitness.finalScore);
-        const percentImprovement = (improvement / denominator) * 100;
-        console.log(
-          `${improvement >= 0 ? '📈' : '📉'} Improvement: ${improvement.toFixed(4)} (${percentImprovement.toFixed(2)}%)`
-        );
-      }
+      this.display.displayComparison(parentCandidate.fitness, childFitness);
+      this.display.displayFitnessMetrics(childFitness);
 
       // Generate feedback if enabled, and fitness > 0
       let feedback: string | undefined;
+      let feedbackPrompt = '';
       if (this.config.feedbackEnabled && childFitness.finalScore > 0) {
         if (this.options.verbose) {
-          console.log(`🤖 Generating candidate solution using ${this.config.feedbackLlmModel || this.config.llmModel}...`);
-          console.log('💬 Generating feedback...');
+          console.log(`💬 Generating feedback using ${this.config.feedbackLlmModel || this.config.llmModel}...`);
         }
 
         try {
           // Extract performance metrics if available
           const performanceMetrics = childFitness.performanceMetrics;
 
+          if (this.config.feedbackPromptTemplate) {
+            feedbackPrompt = this.config.feedbackPromptTemplate
+              .replace(/\{CODE\}/g, childSolution)
+              .replace(/\{QUALITY_SCORE\}/g, childFitness.qualityScore.toFixed(4))
+              .replace(/\{EFFICIENCY_SCORE\}/g, childFitness.efficiencyScore.toFixed(4))
+              .replace(/\{FINAL_SCORE\}/g, childFitness.finalScore.toFixed(4))
+              .replace(/\{PARENT_COMPARISON\}/g, this.display.createParentComparisonPlain(parentCandidate.fitness, childFitness))
+              .replace(/\{PERFORMANCE_DETAILS\}/g, this.display.formatPerformanceMetricsPlain(childFitness.performanceMetrics || {}));
+          }
           feedback = await this.feedbackService.generateFeedback(
             childSolution,
             childFitness,
@@ -321,7 +329,9 @@ export class AlphaRevolve {
         fitnessCopy,
         iteration + 1,
         parentCandidate.id,
-        feedback
+        feedback,
+        prompt, // Save the generation prompt
+        feedback ? feedbackPrompt : undefined // Save the feedback prompt if feedback exists
       );
     } catch (error) {
       console.error(`Error in iteration ${iteration + 1}:`, error);
@@ -337,10 +347,8 @@ export class AlphaRevolve {
     const startTime = Date.now();
 
     try {
-      if (this.options.verbose) {
-        console.log('🚀 Starting AlphaEvolve...');
-        console.log('🧪 Evaluating initial solution...');
-      }
+      this.display.displaySection('Starting AlphaEvolve');
+      this.display.displaySuccess('Evaluating initial solution...');
 
       // Evaluate the initial solution
       const initialFitness = await this.config.fitnessFunction(this.config.initialSolution);
@@ -364,12 +372,12 @@ export class AlphaRevolve {
       // Add initial solution to the database
       this.evaluationDatabase.addProgram(this.config.initialSolution, fitnessCopy, 0);
 
-      if (this.options.verbose) {
-        console.log(`📊 Initial fitness: ${JSON.stringify(initialFitness)}`);
-      }
+      this.display.displayFitnessMetrics(initialFitness);
 
       // Run the evolution for specified iterations
+      this.display.initProgressBar(this.config.iterations);
       for (let i = 0; i < this.config.iterations; i++) {
+        this.display.updateProgressBar(i + 1);
         const parentCandidate = this.evaluationDatabase.getBestProgram();
         if (!parentCandidate) {
           throw new Error('No candidate solution available');
@@ -407,10 +415,8 @@ export class AlphaRevolve {
 
       const runtime = Date.now() - startTime;
 
-      if (this.options.verbose) {
-        console.log(`\n✅ AlphaEvolve finished in ${runtime}ms`);
-        console.log(`🏆 Best fitness: ${JSON.stringify(bestCandidate.fitness)}`);
-      }
+      this.display.stopProgressBar();
+      this.display.displaySummary(bestCandidate, runtime);
 
       // Update metadata and save final results
       this.evaluationDatabase.setMetadata('runtime', runtime);

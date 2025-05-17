@@ -126,7 +126,7 @@ async function main(): Promise<void> {
      const totalItems = testCases.reduce((a,x) => x.input.length + a, 0);
      const averageExecutionTime = totalExecutionTime / (testCases.length * trials);
      console.log('example1: averageExecutionTime=' + averageExecutionTime);
-     const efficiencyScore = Math.max(0, 1 - averageExecutionTime / 10);
+     const efficiencyScore = Math.max(0, 1 - averageExecutionTime / 5); // 5ms baseline execution time per testcase
      const normalizedQuality = qualityScore / (testCases.length * trials);
      const finalScore = qualityScore > 0 ? 0.7 * normalizedQuality + 0.3 * efficiencyScore : 0;
 
@@ -142,7 +142,7 @@ async function main(): Promise<void> {
     initialSolution,
     fitnessFunction: evaluationFunction,
     problemDescription: 'Optimize the sort function for maximum performance.',
-    iterations: 50,
+    iterations: 10,
     llmModel: 'gemma3:12b-it-q8_0',
     promptTemplate: `
 # Problem Description:
@@ -167,7 +167,7 @@ Do not use the built-in sort function, that's cheating. Do not add parameters to
 Include your reasoning as a comment above the function.
 Respond exclusively with the new sort function.
     `,
-    temperature: 0.9,
+    temperature: 0.8,
     maxTokens: 4096,
     feedbackEnabled: true,
     // feedbackLlmModel: 'phi4-reasoning:latest',

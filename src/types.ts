@@ -38,6 +38,10 @@ export interface CandidateSolution {
   timestamp: Date;
   /** Feedback from analysis (if enabled) */
   feedback?: string;
+  /** Prompt used for generating the solution */
+  generationPrompt?: string;
+  /** Prompt used for generating feedback */
+  feedbackPrompt?: string;
 }
 
 /**

@@ -49,7 +49,9 @@ export class ProgramDatabase {
     fitness: { qualityScore: number; efficiencyScore: number; finalScore: number; [key: string]: any },
     iteration: number,
     parentId?: string,
-    feedback?: string
+    feedback?: string,
+    generationPrompt?: string,
+    feedbackPrompt?: string
   ): CandidateSolution {
     // Generate a unique ID using both random bytes and timestamp
     const timestamp = new Date();
@@ -72,7 +74,9 @@ export class ProgramDatabase {
       iteration,
       parent: parentId,
       timestamp,
-      feedback
+      feedback,
+      generationPrompt,
+      feedbackPrompt
     };
 
     this.programs.set(id, candidate);

@@ -138,15 +138,20 @@ async function main(): Promise<void> {
      };
   };
 
-  const config: EvolutionConfig = {
-    initialSolution,
-    fitnessFunction: evaluationFunction,
-    problemDescription: 'Optimize the sort function for maximum performance.',
-    iterations: 10,
-    llmModel: 'gemma3:12b-it-q8_0',
-    promptTemplate: `
-# Problem Description:
-{PROBLEM_DESCRIPTION}
+   const config: EvolutionConfig = {
+     initialSolution,
+     fitnessFunction: evaluationFunction,
+     problemDescription: 'Optimize the sort function for maximum performance.',
+     iterations: 10,
+     llmModel: 'gemma3:12b-it-q8_0',
+     /**
+      * Optional system prompt for code generation LLM (not set here, uses default).
+      * Optional feedbackSystemPrompt for feedback LLM.
+      */
+     feedbackSystemPrompt: 'You are an expert algorithm reviewer. Focus on analyzing sorting algorithm efficiency, correctness, and suggest concrete improvements. Be concise and actionable.',
+     promptTemplate: `
+ # Problem Description:
+ {PROBLEM_DESCRIPTION}
 
 # Current Solution:
 \`\`\`javascript

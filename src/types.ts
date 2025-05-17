@@ -92,8 +92,18 @@ export interface EvolutionConfig {
   /** The initial candidate solution to optimize (e.g., code, function, parameter set) */
   initialSolution: string;
 
-  /** Optional system prompt for LLM behavior customization */
+  /**
+   * Optional system prompt for LLM behavior customization during code generation.
+   * This prompt is used as the system message for the code-generation LLM.
+   */
   systemPrompt?: string;
+
+  /**
+   * Optional system prompt for LLM behavior customization during feedback generation.
+   * This prompt is used as the system message for the feedback LLM.
+   * If not set, a default feedback reviewer prompt will be used.
+   */
+  feedbackSystemPrompt?: string;
 
   /**
    * A fitness function that evaluates a candidate solution.

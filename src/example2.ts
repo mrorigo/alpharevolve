@@ -141,6 +141,11 @@ const config: EvolutionConfig = {
   problemDescription: 'Optimize the primeSieve function for generating prime numbers up to n with high correctness and efficiency.',
   iterations: 10,
   llmModel: 'gemma3:12b-it-q8_0',
+  /**
+   * Optional system prompt for code generation LLM (not set here, uses default).
+   * Optional feedbackSystemPrompt for feedback LLM.
+   */
+  feedbackSystemPrompt: 'You are an expert reviewer of prime number algorithms. Focus on correctness, computational complexity, and practical optimization opportunities. Provide actionable, concise feedback.',
   promptTemplate: `
 # Problem Description:
 {PROBLEM_DESCRIPTION}

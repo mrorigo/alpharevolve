@@ -140,7 +140,7 @@ Raw metrics: ${JSON.stringify(metrics, null, 2)}
     model: string = 'gpt-3.5-turbo',
     temperature: number = 0.7,
     maxTokens: number = 1024,
-    systemPrompt?: string
+    feedbackSystemPrompt?: string // renamed for clarity
   ): Promise<string> {
     try {
       const fullPrompt = prompt + "\nRespond exclusively with the evaluation.";
@@ -151,8 +151,8 @@ Raw metrics: ${JSON.stringify(metrics, null, 2)}
         : fullPrompt;
       Logger.info(`Feedback prompt: ${truncatedPrompt}`);
 
-      // Request feedback from the LLM
-      const sysPrompt = systemPrompt || 'You are an expert code reviewer specializing in algorithm optimization and performance analysis.';
+      // Use feedbackSystemPrompt if provided, otherwise use default
+      const sysPrompt = feedbackSystemPrompt || 'You are an expert code reviewer specializing in algorithm optimization and performance analysis.';
       const response = await this.openai.chat.completions.create({
         model,
         messages: [

@@ -96,7 +96,7 @@ export class PromptBuilder {
     * @param config Evolution configuration with problem details
     * @returns A system prompt suitable for the LLM
     */
-   static buildSystemPrompt(config: EvolutionConfig): string {
+   public static buildSystemPrompt(config: EvolutionConfig): string {
      return `You are an expert algorithm designer and code optimizer specialized in ${config.problemDescription}.
  Your task is to evolve and improve the provided solution according to specific metrics:
  - Quality Score measures correctness and completeness

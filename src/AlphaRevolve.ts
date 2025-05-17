@@ -277,7 +277,7 @@ export class AlphaRevolve {
       // Generate feedback if enabled, and fitness > 0
       let feedback: string | undefined;
       let feedbackPrompt = '';
-      if (this.config.feedbackEnabled && childFitness.finalScore > 0) {
+      if (this.config.feedbackEnabled) {
         if (this.options.verbose) {
           Logger.info(`💬 Generating feedback using ${this.config.feedbackLlmModel || this.config.llmModel}...`);
         }
@@ -307,7 +307,7 @@ export class AlphaRevolve {
             this.config.feedbackLlmModel || this.config.llmModel,
             this.config.feedbackTemperature,
             this.config.feedbackMaxTokens,
-            this.config.systemPrompt // pass systemPrompt for feedback LLM as well
+            this.config.feedbackSystemPrompt // pass feedbackSystemPrompt for feedback LLM
           );
 
           if (this.options.verbose) {

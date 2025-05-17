@@ -1,0 +1,20 @@
+{
+  "version": "1.1",
+  "timestamp": "2025-05-17T12:20:08.633Z",
+  "programs": [
+    {
+      "id": "mas73j93-6cf3794742d5",
+      "solution": "foo",
+      "fitness": {
+        "qualityScore": 1,
+        "efficiencyScore": 1,
+        "finalScore": 1
+      },
+      "iteration": 0,
+      "timestamp": "2025-05-17T12:20:08.631Z"
+    }
+  ],
+  "metadata": {
+    "bestProgramId": "mas73j93-6cf3794742d5"
+  }
+}

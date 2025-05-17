@@ -1,4 +1,4 @@
-import { CandidateSolution } from './types';
+import { CandidateSolution, FilterOptions } from './types';
 import crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -13,17 +13,7 @@ interface SerializedDatabase {
   metadata?: Record<string, any>;
 }
 
-/**
- * Options for filtering candidate solutions
- */
-interface FilterOptions {
-  minQualityScore?: number;
-  minEfficiencyScore?: number;
-  minFinalScore?: number;
-  iterationRange?: [number, number];
-  hasParent?: boolean;
-  hasFeedback?: boolean;
-}
+
 
 /**
  * CandidateDatabase stores, manages, and persists candidate solution evaluations.
@@ -120,20 +110,23 @@ export class ProgramDatabase {
   }
 
   /**
-   * Samples a program randomly from the top N candidates
+   * Samples a program randomly from the top N candidates, optionally using filter options.
    * @param topN Number of top candidates to sample from (default: 3)
+   * @param filterOptions Optional FilterOptions to restrict candidates
    * @returns A randomly selected candidate from the top performers, or null if empty
    */
-  sampleProgram(topN: number = 3): CandidateSolution | null {
+  sampleProgram(topN: number = 3, filterOptions?: FilterOptions): CandidateSolution | null {
     if (this.programs.size === 0) return null;
 
-    // Get all programs sorted by fitness
-    const sorted = this.getAllPrograms()
-      .filter(x => x.fitness.finalScore > 0)
-      .sort((a, b) => b.fitness.finalScore - a.fitness.finalScore);
+    // Use filterPrograms for flexible filtering
+    const filtered = this.filterPrograms(filterOptions || { minFinalScore: 0 });
+
+    // Sort by fitness
+    const sorted = filtered.sort((a, b) => b.fitness.finalScore - a.fitness.finalScore);
 
     // Take the top N (or fewer if there aren't enough)
     const topCandidates = sorted.slice(0, Math.min(topN, sorted.length));
+    if (topCandidates.length === 0) return null;
 
     // Select randomly from the top candidates
     const randomIndex = Math.floor(Math.random() * topCandidates.length);
@@ -163,7 +156,7 @@ export class ProgramDatabase {
 
   /**
    * Filter programs based on criteria
-   * @param options Filter options
+   * @param options Filter options (see FilterOptions in types.ts)
    * @returns Array of matching candidate solutions
    */
   filterPrograms(options: FilterOptions = {}): CandidateSolution[] {

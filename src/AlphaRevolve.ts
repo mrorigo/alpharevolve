@@ -1,4 +1,4 @@
-import { EvolutionResult, EvolutionConfig, CandidateSolution, EvolutionOptions } from './types';
+import { EvolutionResult, EvolutionConfig, CandidateSolution, EvolutionOptions, FilterOptions } from './types';
 import { ProgramDatabase } from './ProgramDatabase';
 import { LlmService } from './LlmService';
 import { PromptBuilder } from './PromptBuilder';
@@ -197,11 +197,13 @@ export class AlphaRevolve {
    * Runs a single iteration of the evolutionary process
    * @param iteration Current iteration number
    * @param parentCandidate The parent solution to evolve from
+   * @param filterOptions Optional FilterOptions to restrict candidate selection for prompt building
    * @returns The new candidate solution or null if generation failed
    */
   private async runIteration(
     iteration: number,
-    parentCandidate: CandidateSolution
+    parentCandidate: CandidateSolution,
+    filterOptions?: FilterOptions
   ): Promise<CandidateSolution | null> {
     if (this.options.verbose) {
       console.log(`\n🔄 Iteration ${iteration + 1}/${this.config.iterations}`);
@@ -209,8 +211,8 @@ export class AlphaRevolve {
     }
 
     try {
-      // Build prompt for the LLM
-      const prompt = PromptBuilder.buildPrompt(this.config, this.evaluationDatabase);
+      // Build prompt for the LLM, passing filterOptions if provided
+      const prompt = PromptBuilder.buildPrompt(this.config, this.evaluationDatabase, filterOptions);
 
       if (this.options.verbose) {
         this.display.displaySection('Prompt Preview');

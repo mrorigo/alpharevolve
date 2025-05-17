@@ -1,4 +1,4 @@
-import { EvolutionConfig } from './types';
+import { EvolutionConfig, FilterOptions } from './types';
 import { ProgramDatabase } from './ProgramDatabase';
 
 /**
@@ -10,10 +10,15 @@ export class PromptBuilder {
    * Builds a prompt for the LLM using the current best candidate solution and previous feedback.
    * @param config The evolution configuration.
    * @param evaluationDatabase The evaluation database.
+   * @param filterOptions Optional FilterOptions to restrict candidate selection.
    * @returns The constructed prompt string.
    */
-  static buildPrompt(config: EvolutionConfig, evaluationDatabase: ProgramDatabase): string {
-    const parentCandidate = evaluationDatabase.sampleProgram();
+  static buildPrompt(
+    config: EvolutionConfig,
+    evaluationDatabase: ProgramDatabase,
+    filterOptions?: FilterOptions
+  ): string {
+    const parentCandidate = evaluationDatabase.sampleProgram(3, filterOptions);
 
     if (!parentCandidate) {
       // Use the initial solution if no candidate exists.

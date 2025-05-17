@@ -45,6 +45,17 @@ export interface CandidateSolution {
 }
 
 /**
+ * Options for filtering candidate solutions
+ */
+export interface FilterOptions {
+  minQualityScore?: number;
+  minEfficiencyScore?: number;
+  minFinalScore?: number;
+  iterationRange?: [number, number];
+  hasParent?: boolean;
+  hasFeedback?: boolean;
+}
+/**
  * Database persistence options
  */
 export interface DatabaseOptions {

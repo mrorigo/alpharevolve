@@ -109,17 +109,17 @@ const config: EvolutionConfig = {
   fitnessFunction: evaluateCandidate,
   problemDescription: 'Optimize prime number generation algorithm',
   iterations: 10,
-  
+
   // LLM settings
   llmModel: 'gemma3:12b-it-q8_0', // or 'gpt-3.5-turbo', 'gemini-1.5-flash', etc.
   temperature: 0.8,              // Control creativity vs determinism
   maxTokens: 4096,               // Maximum response length
-  
+
   // Feedback configuration
   feedbackEnabled: true,
   feedbackLlmModel: 'phi4-reasoning:latest', // Use different model for analysis
   feedbackTemperature: 0.5,      // More deterministic for feedback
-  
+
   // Persistence options
   databaseOptions: {
     saveEnabled: true,
@@ -143,7 +143,7 @@ npm run example2
 ### Visualize Results
 
 - Open `index.html` in your browser.
-- Load a run from the `runs/` directory to explore every candidate, metric, and feedback in your evolutionary journey.
+- Load a run from the `runs/` directory to explore every candidate, metric, prompt and feedback in your evolutionary journey.
 
 ---
 
@@ -175,20 +175,21 @@ If you can measure it, AlphaRevolve can evolve it.
 
 ```
 alpharevolve/
+├── LICENSE
+├── README.md
 ├── runs/            # Saved run histories (JSON)
-├── src/             # Source code
-│   ├── alphaRevolve.ts       # Main evolutionary engine
-│   ├── codeExtractor.ts      # Extract code from LLM outputs
-│   ├── feedbackService.ts    # LLM-powered solution analysis
-│   ├── llmService.ts         # Resilient LLM API interface
-│   ├── programDatabase.ts    # Solution tracking and lineage
-│   ├── promptBuilder.ts      # Dynamic prompt engineering
-│   ├── safeEval.ts           # Secure isolated code execution
-│   ├── types.ts              # Core type definitions
-│   ├── index.ts              # Default entry point
-│   ├── example1.ts           # Example: sorting optimization
-│   ├── example2.ts           # Example: prime sieve optimization
-│   └── ...                   # Utilities and support modules
+├── src
+│  ├── AlphaRevolve.ts
+│  ├── CodeExtractor.ts
+│  ├── ConsoleDisplay.ts
+│  ├── FeedbackService.ts
+│  ├── LlmService.ts
+│  ├── ProgramDatabase.ts
+│  ├── PromptBuilder.ts
+│  ├── example1.ts
+│  ├── example2.ts
+│  ├── safeEval.ts
+│  └── types.ts
 ├── index.html       # Run Explorer (visualization)
 ├── package.json
 └── tsconfig.json
@@ -220,7 +221,7 @@ These security features make AlphaRevolve suitable for both interactive developm
   Swap in your own code, fitness function, and prompt. AlphaRevolve does the rest.
   - **Memory-Safe Evolution:**
     The enhanced `safeEval` system enforces memory limits and tracks detailed performance metrics.
-  
+
   - **Resilient Automation:**
     Built-in retry mechanisms and error recovery make AlphaRevolve robust enough for long-running optimizations.
 
@@ -246,6 +247,7 @@ The framework incorporates sophisticated error handling:
 - **Fallback Strategies:** Multiple code extraction approaches for different LLM response formats
 - **Graceful Degradation:** Evolution continues even if specific steps fail
 - **Comprehensive Logging:** Detailed error information to help diagnose issues
+
 ## 🙏 Acknowledgements
 
 AlphaRevolve is deeply inspired by DeepMind’s [AlphaEvolve](https://deepmind.google/discover/blog/alphaevolve-a-gemini-powered-coding-agent-for-designing-advanced-algorithms/).

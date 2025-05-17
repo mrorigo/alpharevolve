@@ -1,4 +1,4 @@
-import { Evolver } from './AlphaEvolve';
+import { AlphaRevolve } from './AlphaRevolve';
 import { EvolutionConfig } from './types';
 import { safeEval } from './safeEval';
 import * as process from 'process';
@@ -207,7 +207,7 @@ async function main(): Promise<void> {
   }
 
   try {
-    const evolver = new Evolver(config, baseUrl, apiKey);
+    const evolver = new AlphaRevolve(config, baseUrl, apiKey);
     const result = await evolver.run();
     console.log('\n=== Evolver Results ===');
     console.log('Best Candidate Solution:');

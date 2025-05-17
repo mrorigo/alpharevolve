@@ -39,7 +39,7 @@ export class PromptBuilder {
         const heapUsedMB = (metrics.memoryUsage?.delta?.heapUsed / (1024 * 1024)).toFixed(2) || 'N/A';
         const gcTime = metrics.gcStats?.totalTime?.toFixed(2) || 'N/A';
         const gcCount = metrics.gcStats?.count || 'N/A';
-        
+
         performanceInfo += `\n\nDetailed Performance Metrics:
 - Execution Time: ${executionTimeMs} ms
 - Heap Usage: ${heapUsedMB} MB
@@ -68,14 +68,38 @@ export class PromptBuilder {
    * @param values An object mapping placeholders to substitutions.
    * @returns The formatted prompt string.
    */
-  private static formatPromptTemplate(
-    template: string,
-    values: { [key: string]: string }
-  ): string {
-    let result = template;
-    for (const [key, value] of Object.entries(values)) {
-      result = result.replace(new RegExp(`{${key}}`, 'g'), value);
-    }
-    return result;
+   private static formatPromptTemplate(
+     template: string,
+     values: { [key: string]: string }
+   ): string {
+     let result = template;
+
+     // Replace each placeholder with its value
+     for (const [key, value] of Object.entries(values)) {
+       const placeholder = new RegExp(`\\{${key}\\}`, 'g');
+       result = result.replace(placeholder, value || '');
+     }
+
+     // Handle any remaining unmatched placeholders
+     result = result.replace(/\{[A-Z_]+\}/g, '');
+
+     return result;
+   }
+
+   /**
+    * Creates a standardized system prompt to guide LLM behavior
+    * @param config Evolution configuration with problem details
+    * @returns A system prompt suitable for the LLM
+    */
+   static buildSystemPrompt(config: EvolutionConfig): string {
+     return `You are an expert algorithm designer and code optimizer specialized in ${config.problemDescription}.
+ Your task is to evolve and improve the provided solution according to specific metrics:
+ - Quality Score measures correctness and completeness
+ - Efficiency Score measures performance and resource usage
+ - Final Score combines both metrics, weighted for the specific problem
+
+ Focus on making significant improvements with each iteration. Analyze the previous solution,
+ identify bottlenecks, and apply appropriate optimizations. Consider all previous feedback.
+ Your response should contain ONLY the complete improved solution, no explanations outside the code.`;
   }
 }

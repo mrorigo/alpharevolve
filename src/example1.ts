@@ -1,4 +1,4 @@
-import { Evolver } from './AlphaEvolve';
+import { AlphaRevolve } from './AlphaRevolve';
 import { EvolutionConfig } from './types';
 import { safeEval } from './safeEval';
 import * as process from 'process';
@@ -125,7 +125,8 @@ async function main(): Promise<void> {
 
      const totalItems = testCases.reduce((a,x) => x.input.length + a, 0);
      const averageExecutionTime = totalExecutionTime / (testCases.length * trials);
-     const efficiencyScore = Math.max(0, 1 - averageExecutionTime / 50);
+     console.log('example1: averageExecutionTime=' + averageExecutionTime);
+     const efficiencyScore = Math.max(0, 1 - averageExecutionTime / 10);
      const normalizedQuality = qualityScore / (testCases.length * trials);
      const finalScore = qualityScore > 0 ? 0.7 * normalizedQuality + 0.3 * efficiencyScore : 0;
 
@@ -169,7 +170,7 @@ Respond exclusively with the new sort function.
     temperature: 0.9,
     maxTokens: 4096,
     feedbackEnabled: true,
-    feedbackLlmModel: 'phi4-reasoning:latest',
+    // feedbackLlmModel: 'phi4-reasoning:latest',
     databaseOptions: {
       saveEnabled: true,
       saveFrequency: 'iteration'
@@ -187,22 +188,33 @@ You are an expert algorithm analyst reviewing code.
 
 {PARENT_COMPARISON}
 
-Task: Provide detailed, actionable feedback on this sorting implementation.
-Focus on computational complexity and optimization opportunities.
-Comments are not the focus. Algorithmic efficiency is the primary goal.
-    `,
+Task: Provide detailed, concise and actionable feedback on this sorting implementation.
+Focus on computational complexity and optimization opportunities, and suggest new angles of approach.
+Comments are not the focus. Algorithmic efficiency is the primary goal.`,
     feedbackTemperature: 0.7,
     feedbackMaxTokens: 2048
   };
 
   try {
-    const evolver = new Evolver(config, baseUrl, apiKey);
+    // Explicitly enable verbose mode and saveResults
+    const options = {
+      verbose: true,
+      saveResults: true,
+      maxRetries: 3
+    };
+
+    console.log('Starting AlphaRevolve with options:', options);
+    const evolver = new AlphaRevolve(config, baseUrl, apiKey, options);
     const result = await evolver.run();
+
     console.log('\n=== Evolver Results ===');
     console.log('Best Candidate Solution:');
     console.log(result.bestCandidate.solution);
     console.log('Fitness:', result.bestCandidate.fitness);
     console.log('Runtime (ms):', result.runtime);
+
+    // Print database save location
+    console.log(`Database saved to: ${evolver.getDatabasePath()}`);
   } catch (err) {
     console.error('Error running Evolver:', err);
     process.exit(1);

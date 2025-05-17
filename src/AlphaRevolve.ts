@@ -6,6 +6,7 @@ import { CodeExtractor } from './CodeExtractor';
 import { FeedbackService } from './FeedbackService';
 import * as path from 'path';
 import * as fs from 'fs';
+import { Logger } from './logger';
 import chalk from 'chalk';
 import { ConsoleDisplay } from './ConsoleDisplay';
 
@@ -116,15 +117,15 @@ export class AlphaRevolve {
 
      // Log the directory path for debugging
      if (this.options.verbose) {
-       console.log(`📂 Database directory: ${runsDir}`);
+       Logger.info(`📂 Database directory: ${runsDir}`);
      }
 
      if (!fs.existsSync(runsDir)) {
        try {
          fs.mkdirSync(runsDir, { recursive: true });
-         console.log(`📁 Created database directory: ${runsDir}`);
+         Logger.info(`📁 Created database directory: ${runsDir}`);
        } catch (error) {
-         console.error(`❌ Failed to create directory ${runsDir}:`, error);
+         Logger.error(`❌ Failed to create directory ${runsDir}:`, error);
        }
      }
 
@@ -140,13 +141,13 @@ export class AlphaRevolve {
 
      // Log save status for debugging
      if (this.options.verbose) {
-       console.log(`Save check - saveEnabled: ${options.saveEnabled !== false}, saveResults: ${this.options.saveResults}`);
+       Logger.info(`Save check - saveEnabled: ${options.saveEnabled !== false}, saveResults: ${this.options.saveResults}`);
      }
 
      if (options.saveEnabled !== false && this.options.saveResults) {
        try {
          const filePath = this.getDatabasePath();
-         console.log(`📝 Attempting to save database to: ${filePath}${label ? ` (${label})` : ''}`);
+         Logger.info(`📝 Attempting to save database to: ${filePath}${label ? ` (${label})` : ''}`);
 
          // Check if file already exists (for overwrite info)
          const fileExists = fs.existsSync(filePath);
@@ -154,12 +155,12 @@ export class AlphaRevolve {
          // Save database
          await this.evaluationDatabase.saveToFile(filePath);
 
-         console.log(`💾 Database ${fileExists ? 'updated' : 'saved'} to ${filePath}${label ? ` (${label})` : ''}`);
+         Logger.info(`💾 Database ${fileExists ? 'updated' : 'saved'} to ${filePath}${label ? ` (${label})` : ''}`);
        } catch (error) {
          // More detailed error logging
-         console.error(`❌ Error saving database: ${error}`);
+         Logger.error(`❌ Error saving database: ${error}`);
          if (error instanceof Error) {
-           console.error(`Stack trace: ${error.stack}`);
+           Logger.error(`Stack trace: ${error.stack}`);
          }
 
          // Try to check write permissions on directory
@@ -168,13 +169,13 @@ export class AlphaRevolve {
            const testFile = path.join(dir, '.write-test');
            fs.writeFileSync(testFile, 'test');
            fs.unlinkSync(testFile);
-           console.log(`✅ Directory ${dir} is writable`);
+           Logger.info(`✅ Directory ${dir} is writable`);
          } catch (fsError) {
-           console.error(`❌ Directory permission issue: ${fsError}`);
+           Logger.error(`❌ Directory permission issue: ${fsError}`);
          }
        }
      } else if (this.options.verbose) {
-       console.log(`⏭️ Database save skipped (saveEnabled: ${options.saveEnabled}, saveResults: ${this.options.saveResults})`);
+       Logger.info(`⏭️ Database save skipped (saveEnabled: ${options.saveEnabled}, saveResults: ${this.options.saveResults})`);
      }
    }
 
@@ -230,7 +231,8 @@ export class AlphaRevolve {
         prompt,
         this.config.llmModel,
         this.config.temperature,
-        this.config.maxTokens
+        this.config.maxTokens,
+        this.config.systemPrompt // pass systemPrompt if provided
       );
 
       // Display a structured preview of the LLM response
@@ -277,13 +279,14 @@ export class AlphaRevolve {
       let feedbackPrompt = '';
       if (this.config.feedbackEnabled && childFitness.finalScore > 0) {
         if (this.options.verbose) {
-          console.log(`💬 Generating feedback using ${this.config.feedbackLlmModel || this.config.llmModel}...`);
+          Logger.info(`💬 Generating feedback using ${this.config.feedbackLlmModel || this.config.llmModel}...`);
         }
 
         try {
           // Extract performance metrics if available
           const performanceMetrics = childFitness.performanceMetrics;
 
+          // Centralize feedback prompt construction here
           if (this.config.feedbackPromptTemplate) {
             feedbackPrompt = this.config.feedbackPromptTemplate
               .replace(/\{CODE\}/g, childSolution)
@@ -292,23 +295,26 @@ export class AlphaRevolve {
               .replace(/\{FINAL_SCORE\}/g, childFitness.finalScore.toFixed(4))
               .replace(/\{PARENT_COMPARISON\}/g, this.display.createParentComparisonPlain(parentCandidate.fitness, childFitness))
               .replace(/\{PERFORMANCE_DETAILS\}/g, this.display.formatPerformanceMetricsPlain(childFitness.performanceMetrics || {}));
+          } else {
+            feedbackPrompt = '';
           }
           feedback = await this.feedbackService.generateFeedback(
             childSolution,
             childFitness,
             parentCandidate.fitness,
             performanceMetrics,
-            this.config.feedbackPromptTemplate,
+            feedbackPrompt, // always pass the constructed prompt
             this.config.feedbackLlmModel || this.config.llmModel,
             this.config.feedbackTemperature,
-            this.config.feedbackMaxTokens
+            this.config.feedbackMaxTokens,
+            this.config.systemPrompt // pass systemPrompt for feedback LLM as well
           );
 
           if (this.options.verbose) {
-            console.log('Feedback received.');
+            Logger.info('Feedback received.');
           }
         } catch (err: any) {
-          console.error('Feedback error:', err);
+          Logger.error('Feedback error:', err);
         }
       }
 

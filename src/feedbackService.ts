@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { PerformanceMetrics } from './safeEval';
+import { Logger } from './logger';
 
 /**
  * Interface for score metrics used throughout the system
@@ -135,46 +136,29 @@ Raw metrics: ${JSON.stringify(metrics, null, 2)}
     score: ScoreMetrics,
     parentScore?: ScoreMetrics,
     performanceMetrics?: PerformanceMetrics,
-    promptTemplate?: string,
+    prompt: string = '',
     model: string = 'gpt-3.5-turbo',
     temperature: number = 0.7,
-    maxTokens: number = 1024
+    maxTokens: number = 1024,
+    systemPrompt?: string
   ): Promise<string> {
     try {
-      const parentComparison = parentScore
-        ? this.createParentComparison(score, parentScore)
-        : '';
-
-      const performanceDetails = performanceMetrics
-        ? this.formatPerformanceMetrics(performanceMetrics)
-        : '';
-
-      const template = promptTemplate || this.defaultTemplate;
-
-      // Safely replace template placeholders
-      const prompt = template
-        .replace(/\{CODE\}/g, code)
-        .replace(/\{QUALITY_SCORE\}/g, score.qualityScore.toFixed(4))
-        .replace(/\{EFFICIENCY_SCORE\}/g, score.efficiencyScore.toFixed(4))
-        .replace(/\{FINAL_SCORE\}/g, score.finalScore.toFixed(4))
-        .replace(/\{PARENT_COMPARISON\}/g, parentComparison)
-        .replace(/\{PERFORMANCE_DETAILS\}/g, performanceDetails);
-
       const fullPrompt = prompt + "\nRespond exclusively with the evaluation.";
 
       // Log truncated prompt for debugging (avoid excessive console output)
       const truncatedPrompt = fullPrompt.length > 500
         ? `${fullPrompt.substring(0, 500)}... (truncated, total length: ${fullPrompt.length})`
         : fullPrompt;
-      console.log(`Feedback prompt: ${truncatedPrompt}`);
+      Logger.info(`Feedback prompt: ${truncatedPrompt}`);
 
       // Request feedback from the LLM
+      const sysPrompt = systemPrompt || 'You are an expert code reviewer specializing in algorithm optimization and performance analysis.';
       const response = await this.openai.chat.completions.create({
         model,
         messages: [
           {
             role: 'system',
-            content: 'You are an expert code reviewer specializing in algorithm optimization and performance analysis.'
+            content: sysPrompt
           },
           { role: 'user', content: fullPrompt }
         ],
@@ -190,13 +174,13 @@ Raw metrics: ${JSON.stringify(metrics, null, 2)}
         .trim();
 
       if (generatedText.length < 10) {
-        console.error(`Feedback too short: "${generatedText}"`);
+        Logger.error(`Feedback too short: "${generatedText}"`);
         throw new Error("Generated feedback is too short or empty");
       }
 
       return generatedText;
     } catch (error: any) {
-      console.error('Error generating feedback:', error);
+      Logger.error('Error generating feedback:', error);
 
       // Return a graceful error message that won't break the evolution process
       return `**Feedback Generation Error**: The system encountered an issue while analyzing this solution. This does not affect the solution's evaluation scores. Details: ${error.message || 'Unknown error'}`;

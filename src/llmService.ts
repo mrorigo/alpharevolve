@@ -22,7 +22,7 @@ const DEFAULT_RETRY_OPTIONS: RetryOptions = {
   initialDelayMs: 1000,
   backoffFactor: 2,
   retryableErrors: [
-    'rate_limit_exceeded', 
+    'rate_limit_exceeded',
     '429',
     'timeout',
     'server_error',
@@ -52,7 +52,7 @@ export class LlmService {
       apiKey,
       timeout: 60000, // 60 second timeout
     });
-    
+
     // Merge default options with any provided options
     this.retryOptions = {
       ...DEFAULT_RETRY_OPTIONS,
@@ -77,9 +77,9 @@ export class LlmService {
   private isRetryableError(error: any): boolean {
     const errorMessage = error?.message?.toLowerCase() || '';
     const errorCode = error?.status?.toString() || '';
-    
-    return this.retryOptions.retryableErrors.some(retryableError => 
-      errorMessage.includes(retryableError.toLowerCase()) || 
+
+    return this.retryOptions.retryableErrors.some(retryableError =>
+      errorMessage.includes(retryableError.toLowerCase()) ||
       errorCode.startsWith(retryableError)
     );
   }
@@ -94,54 +94,83 @@ export class LlmService {
    * @throws Error if all retries fail
    */
   async generateCode(
-    prompt: string, 
-    model: string, 
-    temperature = 0.7, 
-    maxTokens = 2048
+    prompt: string,
+    model: string,
+    temperature = 0.7,
+    maxTokens = 2048,
+    systemPrompt?: string
   ): Promise<string> {
     let retries = 0;
     let delay = this.retryOptions.initialDelayMs;
-    
+
     while (true) {
       try {
-        const systemPrompt = 'You are an expert developer optimizing code. Respond with well-structured, efficient solutions that prioritize correctness, performance, and readability.';
-        
+        const sysPrompt = systemPrompt || 'You are an expert developer optimizing code. Respond with well-structured, efficient solutions that prioritize correctness, performance, and readability.';
+
         const response = await this.openai.chat.completions.create({
           model,
           messages: [
-            { role: 'system', content: systemPrompt },
+            { role: 'system', content: sysPrompt },
             { role: 'user', content: prompt }
           ],
           temperature,
           max_tokens: maxTokens,
         } as any);
-        
+
         const generated = response.choices[0]?.message?.content || '';
-        
+
         if (!generated || generated.trim().length < 10) {
           throw new Error('LLM returned empty or very short response');
         }
-        
+
         // Log a preview of the response (not the full text to avoid console spam)
-        const previewText = generated.length > 100 
+        const previewText = generated.length > 100
           ? `${generated.substring(0, 100)}... (${generated.length} chars total)`
           : generated;
-        console.log(`LLM response: ${previewText}`);
-        
+        // Use logger if available
+        if (typeof require !== 'undefined') {
+          try {
+            const { Logger } = require('./logger');
+            Logger.info(`LLM response: ${previewText}`);
+          } catch {
+            console.log(`LLM response: ${previewText}`);
+          }
+        } else {
+          console.log(`LLM response: ${previewText}`);
+        }
+
         return generated;
       } catch (error: any) {
         const isRetryable = this.isRetryableError(error);
-        
+
         // If we've exhausted retries or it's not a retryable error, rethrow
         if (retries >= this.retryOptions.maxRetries || !isRetryable) {
-          console.error(`LLM request failed after ${retries} retries:`, error);
+          if (typeof require !== 'undefined') {
+            try {
+              const { Logger } = require('./logger');
+              Logger.error(`LLM request failed after ${retries} retries:`, error);
+            } catch {
+              console.error(`LLM request failed after ${retries} retries:`, error);
+            }
+          } else {
+            console.error(`LLM request failed after ${retries} retries:`, error);
+          }
           throw new Error(`LLM code generation failed: ${error.message || error}`);
         }
-        
+
         // Prepare for retry
         retries++;
-        console.warn(`LLM request failed, retrying (${retries}/${this.retryOptions.maxRetries}): ${error.message}`);
-        
+        if (typeof require !== 'undefined') {
+          try {
+            const { Logger } = require('./logger');
+            Logger.warn(`LLM request failed, retrying (${retries}/${this.retryOptions.maxRetries}): ${error.message}`);
+          } catch {
+            console.warn(`LLM request failed, retrying (${retries}/${this.retryOptions.maxRetries}): ${error.message}`);
+          }
+        } else {
+          console.warn(`LLM request failed, retrying (${retries}/${this.retryOptions.maxRetries}): ${error.message}`);
+        }
+
         // Exponential backoff
         await this.delay(delay);
         delay *= this.retryOptions.backoffFactor;

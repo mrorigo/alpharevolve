@@ -92,6 +92,9 @@ export interface EvolutionConfig {
   /** The initial candidate solution to optimize (e.g., code, function, parameter set) */
   initialSolution: string;
 
+  /** Optional system prompt for LLM behavior customization */
+  systemPrompt?: string;
+
   /**
    * A fitness function that evaluates a candidate solution.
    * Should return scores like qualityScore, efficiencyScore, and a combined finalScore,

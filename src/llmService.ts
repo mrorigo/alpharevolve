@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { Logger } from './logger';
 
 /**
  * Interface for retry options when calling LLM APIs
@@ -127,17 +128,8 @@ export class LlmService {
         const previewText = generated.length > 100
           ? `${generated.substring(0, 100)}... (${generated.length} chars total)`
           : generated;
-        // Use logger if available
-        if (typeof require !== 'undefined') {
-          try {
-            const { Logger } = require('./logger');
-            Logger.info(`LLM response: ${previewText}`);
-          } catch {
-            console.log(`LLM response: ${previewText}`);
-          }
-        } else {
-          console.log(`LLM response: ${previewText}`);
-        }
+
+        Logger.info(`LLM response: ${previewText}`);
 
         return generated;
       } catch (error: any) {
@@ -145,31 +137,13 @@ export class LlmService {
 
         // If we've exhausted retries or it's not a retryable error, rethrow
         if (retries >= this.retryOptions.maxRetries || !isRetryable) {
-          if (typeof require !== 'undefined') {
-            try {
-              const { Logger } = require('./logger');
-              Logger.error(`LLM request failed after ${retries} retries:`, error);
-            } catch {
-              console.error(`LLM request failed after ${retries} retries:`, error);
-            }
-          } else {
-            console.error(`LLM request failed after ${retries} retries:`, error);
-          }
+          Logger.error(`LLM request failed after ${retries} retries:`, error);
           throw new Error(`LLM code generation failed: ${error.message || error}`);
         }
 
         // Prepare for retry
         retries++;
-        if (typeof require !== 'undefined') {
-          try {
-            const { Logger } = require('./logger');
-            Logger.warn(`LLM request failed, retrying (${retries}/${this.retryOptions.maxRetries}): ${error.message}`);
-          } catch {
-            console.warn(`LLM request failed, retrying (${retries}/${this.retryOptions.maxRetries}): ${error.message}`);
-          }
-        } else {
-          console.warn(`LLM request failed, retrying (${retries}/${this.retryOptions.maxRetries}): ${error.message}`);
-        }
+        Logger.warn(`LLM request failed, retrying (${retries}/${this.retryOptions.maxRetries}): ${error.message}`);
 
         // Exponential backoff
         await this.delay(delay);

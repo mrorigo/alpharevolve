@@ -73,31 +73,37 @@ export class PromptBuilder {
    * @param values An object mapping placeholders to substitutions.
    * @returns The formatted prompt string.
    */
-   private static formatPromptTemplate(
-     template: string,
-     values: { [key: string]: string }
-   ): string {
-     let result = template;
+  /**
+   * Replaces template placeholders with provided values.
+   * @param template The prompt template string.
+   * @param values An object mapping placeholders to substitutions.
+   * @returns The formatted prompt string.
+   */
+  public static formatPromptTemplate(
+    template: string,
+    values: { [key: string]: string }
+  ): string {
+    let result = template;
 
-     // Replace each placeholder with its value
-     for (const [key, value] of Object.entries(values)) {
-       const placeholder = new RegExp(`\\{${key}\\}`, 'g');
-       result = result.replace(placeholder, value || '');
-     }
+    // Replace each placeholder with its value
+    for (const [key, value] of Object.entries(values)) {
+      const placeholder = new RegExp(`\\{${key}\\}`, 'g');
+      result = result.replace(placeholder, value || '');
+    }
 
-     // Handle any remaining unmatched placeholders
-     result = result.replace(/\{[A-Z_]+\}/g, '');
+    // Handle any remaining unmatched placeholders
+    result = result.replace(/\{[A-Z_]+\}/g, '');
 
-     return result;
-   }
+    return result;
+  }
 
-   /**
-    * Creates a standardized system prompt to guide LLM behavior
-    * @param config Evolution configuration with problem details
-    * @returns A system prompt suitable for the LLM
-    */
-   public static buildSystemPrompt(config: EvolutionConfig): string {
-     return `You are an expert algorithm designer and code optimizer specialized in ${config.problemDescription}.
+  /**
+   * Creates a standardized system prompt to guide LLM behavior
+   * @param config Evolution configuration with problem details
+   * @returns A system prompt suitable for the LLM
+   */
+  public static buildSystemPrompt(config: EvolutionConfig): string {
+    return `You are an expert algorithm designer and code optimizer specialized in ${config.problemDescription}.
  Your task is to evolve and improve the provided solution according to specific metrics:
  - Quality Score measures correctness and completeness
  - Efficiency Score measures performance and resource usage

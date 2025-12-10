@@ -1,4 +1,4 @@
-import { PromptBuilder } from '../src/PromptBuilder';
+import { PromptBuilder } from '../src/promptBuilder';
 import { ProgramDatabase } from '../src/ProgramDatabase';
 
 const config = {

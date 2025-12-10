@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import { PerformanceMetrics } from './safeEval';
 import { Logger } from './logger';
+import { PromptBuilder } from './promptBuilder';
 
 /**
  * Interface for score metrics used throughout the system
@@ -143,7 +144,34 @@ Raw metrics: ${JSON.stringify(metrics, null, 2)}
     feedbackSystemPrompt?: string // renamed for clarity
   ): Promise<string> {
     try {
-      const fullPrompt = prompt + "\nRespond exclusively with the evaluation.";
+      // Define available replacements
+      const replacements: Record<string, string> = {
+        '{CODE}': code,
+        '{QUALITY_SCORE}': score.qualityScore.toFixed(4),
+        '{EFFICIENCY_SCORE}': score.efficiencyScore.toFixed(4),
+        '{FINAL_SCORE}': score.finalScore.toFixed(4),
+        '{PARENT_COMPARISON}': parentScore ? this.createParentComparison(score, parentScore) : "No parent comparison available.",
+        '{PERFORMANCE_DETAILS}': performanceMetrics ? this.formatPerformanceMetrics(performanceMetrics) : "No detailed performance metrics available."
+      };
+
+      let templateToUse = this.defaultTemplate;
+
+      // Check if a custom prompt or template is provided
+      if (prompt && prompt.trim().length > 0) {
+        // If it looks like a template (contains key placeholders), use it as the template override
+        if (prompt.includes('{CODE}') || prompt.includes('{FINAL_SCORE}')) {
+          templateToUse = prompt;
+        } else {
+          // If it doesn't look like a template, treat it as additional instructions
+          // and prepend it to the default template
+          templateToUse = `${prompt}\n\n${this.defaultTemplate}`;
+        }
+      }
+
+      // Perform replacements using PromptBuilder for consistency
+      let fullPrompt = PromptBuilder.formatPromptTemplate(templateToUse, replacements);
+
+      fullPrompt += "\nRespond exclusively with the evaluation.";
 
       // Log truncated prompt for debugging (avoid excessive console output)
       const truncatedPrompt = fullPrompt.length > 500

@@ -1,9 +1,9 @@
 import { EvolutionResult, EvolutionConfig, CandidateSolution, EvolutionOptions, FilterOptions } from './types';
 import { ProgramDatabase } from './ProgramDatabase';
-import { LlmService } from './LlmService';
-import { PromptBuilder } from './PromptBuilder';
+import { LlmService } from './llmService';
+import { PromptBuilder } from './promptBuilder';
 import { CodeExtractor } from './CodeExtractor';
-import { FeedbackService } from './FeedbackService';
+import { FeedbackService } from './feedbackService';
 import * as path from 'path';
 import * as fs from 'fs';
 import { Logger } from './logger';
@@ -103,81 +103,81 @@ export class AlphaRevolve {
    * Returns the path for saving the evaluation database.
    * @returns File path string
    */
-   /**
-    * Returns the path for saving the evaluation database.
-    * Made public to assist with diagnostics and verification.
-    * @returns File path string
-    */
-   getDatabasePath(): string {
-     const options = this.config.databaseOptions || {};
-     if (options.savePath) return options.savePath;
+  /**
+   * Returns the path for saving the evaluation database.
+   * Made public to assist with diagnostics and verification.
+   * @returns File path string
+   */
+  getDatabasePath(): string {
+    const options = this.config.databaseOptions || {};
+    if (options.savePath) return options.savePath;
 
-     // Create runs directory if it doesn't exist - use absolute path
-     const runsDir = path.resolve(process.cwd(), 'runs');
+    // Create runs directory if it doesn't exist - use absolute path
+    const runsDir = path.resolve(process.cwd(), 'runs');
 
-     // Log the directory path for debugging
-     if (this.options.verbose) {
-       Logger.info(`📂 Database directory: ${runsDir}`);
-     }
+    // Log the directory path for debugging
+    if (this.options.verbose) {
+      Logger.info(`📂 Database directory: ${runsDir}`);
+    }
 
-     if (!fs.existsSync(runsDir)) {
-       try {
-         fs.mkdirSync(runsDir, { recursive: true });
-         Logger.info(`📁 Created database directory: ${runsDir}`);
-       } catch (error) {
-         Logger.error(`❌ Failed to create directory ${runsDir}:`, error);
-       }
-     }
+    if (!fs.existsSync(runsDir)) {
+      try {
+        fs.mkdirSync(runsDir, { recursive: true });
+        Logger.info(`📁 Created database directory: ${runsDir}`);
+      } catch (error) {
+        Logger.error(`❌ Failed to create directory ${runsDir}:`, error);
+      }
+    }
 
-     return path.join(runsDir, `${this.runId}.json`);
-   }
+    return path.join(runsDir, `${this.runId}.json`);
+  }
 
   /**
    * Saves the evaluation database to disk if enabled.
    * @param label Optional label for the save (e.g., iteration number)
    */
-   private async saveDatabaseIfEnabled(label: string = ''): Promise<void> {
-     const options = this.config.databaseOptions || {};
+  private async saveDatabaseIfEnabled(label: string = ''): Promise<void> {
+    const options = this.config.databaseOptions || {};
 
-     // Log save status for debugging
-     if (this.options.verbose) {
-       Logger.info(`Save check - saveEnabled: ${options.saveEnabled !== false}, saveResults: ${this.options.saveResults}`);
-     }
+    // Log save status for debugging
+    if (this.options.verbose) {
+      Logger.info(`Save check - saveEnabled: ${options.saveEnabled !== false}, saveResults: ${this.options.saveResults}`);
+    }
 
-     if (options.saveEnabled !== false && this.options.saveResults) {
-       try {
-         const filePath = this.getDatabasePath();
-         Logger.info(`📝 Attempting to save database to: ${filePath}${label ? ` (${label})` : ''}`);
+    if (options.saveEnabled !== false && this.options.saveResults) {
+      try {
+        const filePath = this.getDatabasePath();
+        Logger.info(`📝 Attempting to save database to: ${filePath}${label ? ` (${label})` : ''}`);
 
-         // Check if file already exists (for overwrite info)
-         const fileExists = fs.existsSync(filePath);
+        // Check if file already exists (for overwrite info)
+        const fileExists = fs.existsSync(filePath);
 
-         // Save database
-         await this.evaluationDatabase.saveToFile(filePath);
+        // Save database
+        await this.evaluationDatabase.saveToFile(filePath);
 
-         Logger.info(`💾 Database ${fileExists ? 'updated' : 'saved'} to ${filePath}${label ? ` (${label})` : ''}`);
-       } catch (error) {
-         // More detailed error logging
-         Logger.error(`❌ Error saving database: ${error}`);
-         if (error instanceof Error) {
-           Logger.error(`Stack trace: ${error.stack}`);
-         }
+        Logger.info(`💾 Database ${fileExists ? 'updated' : 'saved'} to ${filePath}${label ? ` (${label})` : ''}`);
+      } catch (error) {
+        // More detailed error logging
+        Logger.error(`❌ Error saving database: ${error}`);
+        if (error instanceof Error) {
+          Logger.error(`Stack trace: ${error.stack}`);
+        }
 
-         // Try to check write permissions on directory
-         try {
-           const dir = path.dirname(this.getDatabasePath());
-           const testFile = path.join(dir, '.write-test');
-           fs.writeFileSync(testFile, 'test');
-           fs.unlinkSync(testFile);
-           Logger.info(`✅ Directory ${dir} is writable`);
-         } catch (fsError) {
-           Logger.error(`❌ Directory permission issue: ${fsError}`);
-         }
-       }
-     } else if (this.options.verbose) {
-       Logger.info(`⏭️ Database save skipped (saveEnabled: ${options.saveEnabled}, saveResults: ${this.options.saveResults})`);
-     }
-   }
+        // Try to check write permissions on directory
+        try {
+          const dir = path.dirname(this.getDatabasePath());
+          const testFile = path.join(dir, '.write-test');
+          fs.writeFileSync(testFile, 'test');
+          fs.unlinkSync(testFile);
+          Logger.info(`✅ Directory ${dir} is writable`);
+        } catch (fsError) {
+          Logger.error(`❌ Directory permission issue: ${fsError}`);
+        }
+      }
+    } else if (this.options.verbose) {
+      Logger.info(`⏭️ Database save skipped (saveEnabled: ${options.saveEnabled}, saveResults: ${this.options.saveResults})`);
+    }
+  }
 
   /**
    * Validates a candidate solution's syntax without executing it
@@ -286,18 +286,8 @@ export class AlphaRevolve {
           // Extract performance metrics if available
           const performanceMetrics = childFitness.performanceMetrics;
 
-          // Centralize feedback prompt construction here
-          if (this.config.feedbackPromptTemplate) {
-            feedbackPrompt = this.config.feedbackPromptTemplate
-              .replace(/\{CODE\}/g, childSolution)
-              .replace(/\{QUALITY_SCORE\}/g, childFitness.qualityScore.toFixed(4))
-              .replace(/\{EFFICIENCY_SCORE\}/g, childFitness.efficiencyScore.toFixed(4))
-              .replace(/\{FINAL_SCORE\}/g, childFitness.finalScore.toFixed(4))
-              .replace(/\{PARENT_COMPARISON\}/g, this.display.createParentComparisonPlain(parentCandidate.fitness, childFitness))
-              .replace(/\{PERFORMANCE_DETAILS\}/g, this.display.formatPerformanceMetricsPlain(childFitness.performanceMetrics || {}));
-          } else {
-            feedbackPrompt = '';
-          }
+          // Pass the raw template (or empty string) to FeedbackService, which now handles interpolation.
+          feedbackPrompt = this.config.feedbackPromptTemplate || '';
           feedback = await this.feedbackService.generateFeedback(
             childSolution,
             childFitness,

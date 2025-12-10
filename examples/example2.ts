@@ -1,6 +1,6 @@
-import { AlphaRevolve } from './AlphaRevolve';
-import { EvolutionConfig } from './types';
-import { safeEval } from './safeEval';
+import { AlphaRevolve } from '../src/AlphaRevolve';
+import { EvolutionConfig } from '../src/types';
+import { safeEval } from '../src/safeEval';
 import * as process from 'process';
 
 /**
@@ -47,70 +47,69 @@ function trustedPrimeSieve(n: number): number[] {
  *   The candidate must define a function "primeSieve" that accepts an integer and returns an array of numbers.
  * @returns An object with fitness metrics: qualityScore, efficiencyScore, and finalScore.
  */
- const fitnessFunction = async (solution: string): Promise<{
-   qualityScore: number;
-   efficiencyScore: number;
-   finalScore: number;
-   performanceMetrics?: any;
- }> => {
-   type TestCase = { n: number; expected: number[] };
-   // Define a series of test cases with increasing input sizes.
-   const testCases: TestCase[] = [
-     { n: 50, expected: trustedPrimeSieve(50) },
-     { n: 100, expected: trustedPrimeSieve(100) },
-     { n: 500, expected: trustedPrimeSieve(500) },
-     { n: 1000, expected: trustedPrimeSieve(1000) },
-     { n: 5000, expected: trustedPrimeSieve(5000) },
-   ];
+const fitnessFunction = async (solution: string): Promise<{
+  qualityScore: number;
+  efficiencyScore: number;
+  finalScore: number;
+  performanceMetrics?: any;
+}> => {
+  type TestCase = { n: number; expected: number[] };
+  // Define a series of test cases with increasing input sizes.
+  const testCases: TestCase[] = [
+    { n: 50, expected: trustedPrimeSieve(50) },
+    { n: 100, expected: trustedPrimeSieve(100) },
+    { n: 500, expected: trustedPrimeSieve(500) },
+    { n: 1000, expected: trustedPrimeSieve(1000) },
+    { n: 5000, expected: trustedPrimeSieve(5000) },
+  ];
 
-   const { performance } = require('perf_hooks');
-   let correctCount = 0;
-   let totalTime = 0;
-   let bestPerformanceMetrics = null;
-   const trials = 30;
+  let correctCount = 0;
+  let totalTime = 0;
+  let bestPerformanceMetrics = null;
+  const trials = 30;
 
-   for (let t = 0; t < trials; t++) {
-     // Use the largest test case for detailed performance metrics
-     const largestTestCase = testCases[testCases.length - 1];
+  for (let t = 0; t < trials; t++) {
+    // Use the largest test case for detailed performance metrics
+    const largestTestCase = testCases[testCases.length - 1];
 
-     for (const testCase of testCases) {
-       try {
-         // Evaluate the candidate solution in a worker thread.
-         // The candidate solution must define a function "primeSieve".
-         const { result, executionTime, performanceMetrics } = await safeEval(solution, testCase.n, 3000, "primeSieve");
-         totalTime += executionTime;
+    for (const testCase of testCases) {
+      try {
+        // Evaluate the candidate solution in a worker thread.
+        // The candidate solution must define a function "primeSieve".
+        const { result, executionTime, performanceMetrics } = await safeEval(solution, testCase.n, 3000, "primeSieve");
+        totalTime += executionTime;
 
-         // Capture performance metrics from the largest test case on the first trial
-         // This provides the most representative metrics for complex inputs
-         if (testCase.n === largestTestCase.n && t === 0) {
-           bestPerformanceMetrics = performanceMetrics;
-         }
+        // Capture performance metrics from the largest test case on the first trial
+        // This provides the most representative metrics for complex inputs
+        if (testCase.n === largestTestCase.n && t === 0) {
+          bestPerformanceMetrics = performanceMetrics;
+        }
 
-         // Check correctness by comparing arrays.
-         const candidateOutput: number[] = result;
-         const expectedOutput = testCase.expected;
-         if (JSON.stringify(candidateOutput) === JSON.stringify(expectedOutput)) {
-           correctCount += 1;
-         }
-       } catch (error: any) {
-         console.error(`Test case n=${testCase.n} failed: ${error.message}`);
-         totalTime += 3000;
-       }
-     }
-   }
-   const totalCases = testCases.length * trials;
-   const qualityScore = correctCount / totalCases; // value between 0 and 1
-   const averageTime = totalTime / totalCases; // in milliseconds
-   // Assume a baseline of 10ms; lower execution time is better.
-   const efficiencyScore = Math.max(0, 1 - averageTime / 10 * trials);
-   const finalScore = 0.7 * qualityScore + 0.3 * efficiencyScore;
+        // Check correctness by comparing arrays.
+        const candidateOutput: number[] = result;
+        const expectedOutput = testCase.expected;
+        if (JSON.stringify(candidateOutput) === JSON.stringify(expectedOutput)) {
+          correctCount += 1;
+        }
+      } catch (error: any) {
+        console.error(`Test case n=${testCase.n} failed: ${error.message}`);
+        totalTime += 3000;
+      }
+    }
+  }
+  const totalCases = testCases.length * trials;
+  const qualityScore = correctCount / totalCases; // value between 0 and 1
+  const averageTime = totalTime / totalCases; // in milliseconds
+  // Assume a baseline of 10ms; lower execution time is better.
+  const efficiencyScore = Math.max(0, 1 - averageTime / 10 * trials);
+  const finalScore = 0.7 * qualityScore + 0.3 * efficiencyScore;
 
-   return {
-     qualityScore,
-     efficiencyScore,
-     finalScore,
-     performanceMetrics: bestPerformanceMetrics
-   };
+  return {
+    qualityScore,
+    efficiencyScore,
+    finalScore,
+    performanceMetrics: bestPerformanceMetrics
+  };
 };
 
 const initialSolution = `

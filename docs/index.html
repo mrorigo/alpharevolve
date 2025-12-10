@@ -796,16 +796,18 @@
                 this.size = Math.random() * 2 + 1;
                 this.color = Math.random() > 0.5 ? 'rgba(59, 130, 246, ' : 'rgba(16, 185, 129, ';
                 this.opacity = Math.random() * 0.5 + 0.1;
+                this.count = Math.random() * 360;
             }
 
             update() {
-                this.x += this.vx;
-                this.y += this.vy;
+                this.x += this.vx * Math.sin(this.count / 360) + Math.cos(this.count / 172);
+                this.y += this.vy * Math.cos(this.count / 136) + Math.sin(this.count / 472);
 
                 if (this.x < 0) this.x = width;
                 if (this.x > width) this.x = 0;
                 if (this.y < 0) this.y = height;
                 if (this.y > height) this.y = 0;
+                this.count++;
             }
 
             draw() {
@@ -838,10 +840,10 @@
                     const dy = p.y - p2.y;
                     const distance = Math.sqrt(dx * dx + dy * dy);
 
-                    if (distance < 100) {
+                    if (distance < 200) {
                         ctx.beginPath();
-                        ctx.strokeStyle = `rgba(150, 150, 150, ${0.1 * (1 - distance / 100)})`;
-                        ctx.lineWidth = 1;
+                        ctx.strokeStyle = `rgba(150, ${150 + distance / 2}, ${150 + distance / 2}, ${0.2 * (1 - distance / 200)})`;
+                        ctx.lineWidth = 2 * distance / 110;
                         ctx.moveTo(p.x, p.y);
                         ctx.lineTo(p2.x, p2.y);
                         ctx.stroke();

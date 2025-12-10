@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AlphaRevolve | Evolutionary Optimization Meets LLM Superpowers</title>
+    <meta name="description"
+        content="Combine the relentless search of evolutionary algorithms with the creative spark of LLMs to discover smarter, faster, and more idiomatic code solutions.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0a0a0c;
+            --surface-color: #131316;
+            --surface-hover: #1c1c21;
+            --primary-color: #3b82f6;
+            /* Blueish */
+            --accent-color: #10b981;
+            /* Greenish */
+            --text-primary: #ffffff;
+            --text-secondary: #9ca3af;
+            --border-color: #27272a;
+            --glow-color: rgba(59, 130, 246, 0.5);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        h1,
+        h2,
+        h3,
+        h4,
+        h5,
+        h6 {
+            font-family: 'Space Grotesk', sans-serif;
+            color: var(--text-primary);
+            font-weight: 700;
+        }
+
+        a {
+            text-decoration: none;
+            color: inherit;
+            transition: color 0.2s;
+        }
+
+        ul {
+            list-style: none;
+        }
+
+        /* Utilities */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        .section-padding {
+            padding: 6rem 0;
+        }
+
+        .text-gradient {
+            background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 0.875rem 2rem;
+            border-radius: 9999px;
+            font-weight: 600;
+            font-family: 'Space Grotesk', sans-serif;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border: 1px solid transparent;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+            color: white;
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--text-secondary);
+        }
+
+        /* Background Effects */
+        .bg-glow {
+            position: absolute;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, var(--glow-color) 0%, transparent 70%);
+            opacity: 0.15;
+            filter: blur(80px);
+            z-index: -1;
+            border-radius: 50%;
+        }
+
+        .bg-glow-1 {
+            top: -200px;
+            left: -200px;
+        }
+
+        .bg-glow-2 {
+            bottom: -200px;
+            right: -200px;
+            background: radial-gradient(circle, var(--accent-color) 0%, transparent 70%);
+        }
+
+        /* Navigation */
+        nav {
+            padding: 1.5rem 0;
+            position: fixed;
+            width: 100%;
+            top: 0;
+            z-index: 50;
+            background: rgba(10, 10, 12, 0.8);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        nav .container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .logo svg {
+            width: 28px;
+            height: 28px;
+            fill: url(#gradient);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        .nav-links a {
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .nav-links a:hover {
+            color: var(--text-primary);
+        }
+
+        /* Hero Section */
+        .hero {
+            padding-top: 10rem;
+            padding-bottom: 6rem;
+            min-height: 90vh;
+            display: flex;
+            align-items: center;
+            position: relative;
+        }
+
+        .hero-content {
+            max-width: 800px;
+        }
+
+        .hero h1 {
+            font-size: 4rem;
+            line-height: 1.1;
+            margin-bottom: 1.5rem;
+            letter-spacing: -0.02em;
+        }
+
+        .hero p {
+            font-size: 1.25rem;
+            color: var(--text-secondary);
+            margin-bottom: 2.5rem;
+            max-width: 600px;
+        }
+
+        .hero-btns {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .hero-visual {
+            position: absolute;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 45%;
+            height: 100%;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            z-index: -1;
+            opacity: 0.8;
+            pointer-events: none;
+        }
+
+        /* Canvas container for particle effect */
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Features Grid */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: 3rem;
+        }
+
+        .feature-card {
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            padding: 2rem;
+            border-radius: 16px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(45deg, rgba(59, 130, 246, 0.05), transparent);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--primary-color);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .feature-card:hover::before {
+            opacity: 1;
+        }
+
+        .feature-icon {
+            width: 48px;
+            height: 48px;
+            background: rgba(59, 130, 246, 0.1);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+            color: var(--primary-color);
+            font-size: 1.5rem;
+        }
+
+        .feature-card h3 {
+            font-size: 1.25rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .feature-card p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        /* Workflow Section */
+        .workflow {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .workflow-steps {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 2rem;
+            margin-top: 4rem;
+            position: relative;
+        }
+
+        .workflow-step {
+            flex: 1;
+            min-width: 200px;
+            text-align: center;
+            background: var(--surface-color);
+            padding: 2rem;
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            z-index: 1;
+            position: relative;
+        }
+
+        .step-number {
+            font-size: 4rem;
+            font-weight: 700;
+            color: rgba(255, 255, 255, 0.05);
+            position: absolute;
+            top: 0.5rem;
+            right: 1.5rem;
+            line-height: 1;
+        }
+
+        .workflow-arrow {
+            color: var(--text-secondary);
+            font-size: 1.5rem;
+            opacity: 0.5;
+        }
+
+        @media (max-width: 768px) {
+            .workflow-arrow {
+                transform: rotate(90deg);
+                margin: 1rem 0;
+            }
+        }
+
+        /* Code Block */
+        .code-window {
+            background: #1e1e1e;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--border-color);
+            font-family: 'Fira Code', monospace;
+            font-size: 0.9rem;
+            margin-top: 2rem;
+        }
+
+        .window-header {
+            background: #252526;
+            padding: 0.75rem 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .red {
+            background: #ff5f56;
+        }
+
+        .yellow {
+            background: #ffbd2e;
+        }
+
+        .green {
+            background: #27c93f;
+        }
+
+        .code-content {
+            padding: 1.5rem;
+            color: #d4d4d4;
+            overflow-x: auto;
+        }
+
+        .token.comment {
+            color: #6a9955;
+        }
+
+        .token.keyword {
+            color: #569cd6;
+        }
+
+        .token.string {
+            color: #ce9178;
+        }
+
+        .token.function {
+            color: #dcdcaa;
+        }
+
+        /* Use Cases Section */
+        .use-cases {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 4rem;
+            align-items: center;
+        }
+
+        .use-case-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .use-case-item {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-start;
+        }
+
+        .check-icon {
+            color: var(--accent-color);
+            background: rgba(16, 185, 129, 0.1);
+            padding: 0.25rem;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        /* Footer */
+        footer {
+            border-top: 1px solid var(--border-color);
+            padding: 4rem 0;
+            margin-top: 4rem;
+            background: var(--surface-color);
+        }
+
+        .footer-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 2rem;
+        }
+
+        .footer-logo {
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 700;
+            font-size: 1.25rem;
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 2rem;
+        }
+
+        .footer-links a {
+            color: var(--text-secondary);
+        }
+
+        .footer-links a:hover {
+            color: var(--text-primary);
+        }
+
+        /* Responsive */
+        @media (max-width: 992px) {
+            .hero h1 {
+                font-size: 3rem;
+            }
+
+            .use-cases {
+                grid-template-columns: 1fr;
+            }
+
+            .hero-visual {
+                display: none;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .hero {
+                padding-top: 8rem;
+                text-align: center;
+            }
+
+            .hero-content {
+                margin: 0 auto;
+            }
+
+            .hero-btns {
+                justify-content: center;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            /* Simplified for mobile */
+        }
+    </style>
+</head>
+
+<body>
+
+    <svg width="0" height="0">
+        <defs>
+            <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:var(--primary-color);stop-opacity:1" />
+                <stop offset="100%" style="stop-color:var(--accent-color);stop-opacity:1" />
+            </linearGradient>
+        </defs>
+    </svg>
+
+    <div class="bg-glow bg-glow-1"></div>
+    <div class="bg-glow bg-glow-2"></div>
+
+    <nav>
+        <div class="container">
+            <a href="#" class="logo">
+                <svg viewBox="0 0 24 24">
+                    <path
+                        d="M12 2L2 7l10 5 10-5-10-5zm0 9l2.5-1.25L12 8.5l-2.5 1.25L12 11zm0 2.5l-5-2.5-5 2.5L12 22l10-8.5-5-2.5-5 2.5z" />
+                </svg>
+                AlphaRevolve
+            </a>
+            <div class="nav-links">
+                <a href="#features">Features</a>
+                <a href="#workflow">How It Works</a>
+                <a href="#use-cases">Use Cases</a>
+                <a href="https://github.com/mrorigo/alpharevolve" target="_blank" class="btn btn-primary"
+                    style="padding: 0.5rem 1.5rem; font-size: 0.9rem;">GitHub</a>
+            </div>
+        </div>
+    </nav>
+
+    <section class="hero container">
+        <div class="hero-content">
+            <h1>Evolutionary Optimization Meets <span class="text-gradient">LLM Superpowers</span></h1>
+            <p>Combine the relentless search of evolutionary algorithms with the creative spark of Large Language
+                Models. Discover smarter, faster, and more idiomatic solutions automatically.</p>
+            <div class="hero-btns">
+                <a href="https://github.com/mrorigo/alpharevolve" class="btn btn-primary">Get Started</a>
+                <a href="#features" class="btn btn-secondary">Learn More</a>
+            </div>
+        </div>
+        <div class="hero-visual">
+            <div id="canvas-container"></div>
+        </div>
+    </section>
+
+    <section id="features" class="container section-padding">
+        <div style="text-align: center; margin-bottom: 4rem;">
+            <h2>Why AlphaRevolve?</h2>
+            <p style="color: var(--text-secondary); margin-top: 1rem;">Optimizing code shouldn't be a manual grind.</p>
+        </div>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">🧬</div>
+                <h3>AI-Driven Evolution</h3>
+                <p>LLMs propose targeted improvements rather than random mutations, guiding the evolutionary process
+                    intelligently.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🛡️</div>
+                <h3>Safe Evaluation</h3>
+                <p>Every candidate runs in isolation (worker threads) with strict memory limits and timeouts. No rogue
+                    code crashes your app.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🎯</div>
+                <h3>Flexible Fitness</h3>
+                <p>Optimize for speed, memory, style, or security. If you can write a metric function for it, you can
+                    evolve it.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">📊</div>
+                <h3>Full Visualization</h3>
+                <p>Explore the entire evolutionary tree. Track lineage, prompts, feedback, and performance metrics in
+                    real-time.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🔄</div>
+                <h3>Robust Recovery</h3>
+                <p>Built-in retries with exponential backoff and graceful failure handling ensure long-running
+                    optimizations complete.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">⚡</div>
+                <h3>Model Agnostic</h3>
+                <p>Plug in OpenAI, Gemini, Ollama, or any other LLM provider. Configure different models for generation
+                    and feedback.</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="workflow" class="workflow section-padding">
+        <div class="container">
+            <div style="text-align: center; margin-bottom: 3rem;">
+                <h2>The Feedback Loop</h2>
+                <p style="color: var(--text-secondary); margin-top: 1rem;">How AlphaRevolve turns code into better code.
+                </p>
+            </div>
+
+            <div class="workflow-steps">
+                <div class="workflow-step">
+                    <span class="step-number">01</span>
+                    <h3>Generate</h3>
+                    <p style="margin-top: 1rem; color: var(--text-secondary);">LLM analyzes the current best solution
+                        and feedback to propose a mutated, improved version.</p>
+                </div>
+                <div class="workflow-arrow">➜</div>
+                <div class="workflow-step">
+                    <span class="step-number">02</span>
+                    <h3>Evaluate</h3>
+                    <p style="margin-top: 1rem; color: var(--text-secondary);">Candidate code is executed in a sandbox
+                        against your fitness function and test suite.</p>
+                </div>
+                <div class="workflow-arrow">➜</div>
+                <div class="workflow-step">
+                    <span class="step-number">03</span>
+                    <h3>Select</h3>
+                    <p style="margin-top: 1rem; color: var(--text-secondary);">Successful candidates with higher fitness
+                        scores survive and become parents for the next generation.</p>
+                </div>
+            </div>
+
+            <div class="code-window">
+                <div class="window-header">
+                    <div class="dot red"></div>
+                    <div class="dot yellow"></div>
+                    <div class="dot green"></div>
+                    <span style="margin-left: 1rem; color: #888;">config.ts</span>
+                </div>
+                <div class="code-content">
+                    <pre><code><span class="token keyword">const</span> config = {
+  <span class="token comment">// Core problem definition</span>
+  initialSolution: initialCode,
+  fitnessFunction: evaluateCandidate,
+  
+  <span class="token comment">// Evolution settings</span>
+  generations: 10,
+  populationSize: 5,
+  
+  <span class="token comment">// AI Configuration</span>
+  llmModel: <span class="token string">'gemini-1.5-pro'</span>, 
+  feedbackEnabled: <span class="token keyword">true</span>,
+  
+  <span class="token comment">// Safety</span>
+  sandbox: { memoryLimit: 512, timeout: 5000 }
+};
+
+<span class="token keyword">const</span> evolver = <span class="token keyword">new</span> AlphaRevolve(config);
+<span class="token keyword">await</span> evolver.run();</code></pre>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="use-cases" class="container section-padding">
+        <div class="use-cases">
+            <div>
+                <h2>What Can You Evolve?</h2>
+                <p style="color: var(--text-secondary); margin: 1.5rem 0 2.5rem 0;">From classic algorithms to complex
+                    system migrations.</p>
+
+                <div class="use-case-list">
+                    <div class="use-case-item">
+                        <div class="check-icon">✓</div>
+                        <div>
+                            <h4>Algorithm Optimization</h4>
+                            <p style="color: var(--text-secondary);">Evolve faster sorts, searches, or mathematical
+                                computations.</p>
+                        </div>
+                    </div>
+                    <div class="use-case-item">
+                        <div class="check-icon">✓</div>
+                        <div>
+                            <h4>Idiomatic Refactoring</h4>
+                            <p style="color: var(--text-secondary);">Modernize legacy codebases by rewarding idiomatic
+                                API usage.</p>
+                        </div>
+                    </div>
+                    <div class="use-case-item">
+                        <div class="check-icon">✓</div>
+                        <div>
+                            <h4>Framework Migration</h4>
+                            <p style="color: var(--text-secondary);">Port React to Vue or Angular to Svelte
+                                incrementally.</p>
+                        </div>
+                    </div>
+                    <div class="use-case-item">
+                        <div class="check-icon">✓</div>
+                        <div>
+                            <h4>Security Hardening</h4>
+                            <p style="color: var(--text-secondary);">Use static analysis scores as fitness to patch
+                                vulnerabilities.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Interactive Visual or Abstract Graphic Placeholder -->
+            <div
+                style="background: var(--surface-color); border-radius: 20px; padding: 2rem; border: 1px solid var(--border-color); min-height: 400px; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden;">
+                <div
+                    style="position: absolute; inset: 0; background: radial-gradient(circle at 70% 30%, rgba(16, 185, 129, 0.1), transparent 50%);">
+                </div>
+                <!-- Simple SVG visualization of evolution -->
+                <svg viewBox="0 0 400 300" width="100%" height="auto">
+                    <!-- Generation 1 -->
+                    <circle cx="50" cy="150" r="10" fill="#3b82f6" opacity="0.5" />
+                    <line x1="60" y1="150" x2="110" y2="100" stroke="#27272a" stroke-width="2" />
+                    <line x1="60" y1="150" x2="110" y2="200" stroke="#27272a" stroke-width="2" />
+
+                    <!-- Generation 2 -->
+                    <circle cx="120" cy="100" r="12" fill="#3b82f6" opacity="0.7" />
+                    <circle cx="120" cy="200" r="8" fill="#3b82f6" opacity="0.3" /> <!-- Failed branch -->
+
+                    <line x1="132" y1="100" x2="190" y2="70" stroke="#27272a" stroke-width="2" />
+                    <line x1="132" y1="100" x2="190" y2="130" stroke="#27272a" stroke-width="2" />
+
+                    <!-- Generation 3 -->
+                    <circle cx="200" cy="70" r="14" fill="#3b82f6" opacity="0.8" />
+                    <circle cx="200" cy="130" r="14" fill="#3b82f6" opacity="0.6" />
+
+                    <line x1="214" y1="70" x2="280" y2="70" stroke="#27272a" stroke-width="2" />
+
+                    <!-- Generation 4 (Optimized) -->
+                    <circle cx="300" cy="70" r="20" fill="#10b981"
+                        filter="drop-shadow(0 0 10px rgba(16, 185, 129, 0.5))">
+                        <animate attributeName="r" values="18;21;18" dur="3s" repeatCount="indefinite" />
+                    </circle>
+                    <text x="290" y="75" fill="white" font-family="sans-serif" font-size="10"
+                        font-weight="bold">BEST</text>
+                </svg>
+            </div>
+        </div>
+    </section>
+
+    <section class="container section-padding" style="text-align: center;">
+        <h2 style="font-size: 2.5rem; margin-bottom: 2rem;">Ready to Evolve Your Code?</h2>
+        <a href="https://github.com/mrorigo/alpharevolve" class="btn btn-primary"
+            style="font-size: 1.1rem; padding: 1rem 3rem;">View on GitHub</a>
+    </section>
+
+    <footer>
+        <div class="container footer-content">
+            <div class="footer-logo">AlphaRevolve</div>
+            <div class="footer-links">
+                <a href="#features">Features</a>
+                <a href="https://github.com/mrorigo/alpharevolve">GitHub</a>
+                <a href="https://github.com/mrorigo/alpharevolve/blob/main/LICENSE">License</a>
+            </div>
+            <div
+                style="color: var(--text-secondary); width: 100%; text-align: center; margin-top: 2rem; font-size: 0.9rem;">
+                © 2025 AlphaRevolve. Open Source Software.
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Simple particle system for the hero background
+        const container = document.getElementById('canvas-container');
+        const canvas = document.createElement('canvas');
+        container.appendChild(canvas);
+        const ctx = canvas.getContext('2d');
+
+        let width, height;
+        let particles = [];
+
+        function resize() {
+            width = container.clientWidth;
+            height = container.clientHeight;
+            canvas.width = width;
+            canvas.height = height;
+        }
+
+        class Particle {
+            constructor() {
+                this.x = Math.random() * width;
+                this.y = Math.random() * height;
+                this.vx = (Math.random() - 0.5) * 0.5;
+                this.vy = (Math.random() - 0.5) * 0.5;
+                this.size = Math.random() * 2 + 1;
+                this.color = Math.random() > 0.5 ? 'rgba(59, 130, 246, ' : 'rgba(16, 185, 129, ';
+                this.opacity = Math.random() * 0.5 + 0.1;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+
+                if (this.x < 0) this.x = width;
+                if (this.x > width) this.x = 0;
+                if (this.y < 0) this.y = height;
+                if (this.y > height) this.y = 0;
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fillStyle = this.color + this.opacity + ')';
+                ctx.fill();
+            }
+        }
+
+        function init() {
+            resize();
+            for (let i = 0; i < 50; i++) {
+                particles.push(new Particle());
+            }
+        }
+
+        function animate() {
+            ctx.clearRect(0, 0, width, height);
+
+            // Draw connections
+            particles.forEach((p, index) => {
+                p.update();
+                p.draw();
+
+                // Connect particles close to each other
+                for (let j = index + 1; j < particles.length; j++) {
+                    const p2 = particles[j];
+                    const dx = p.x - p2.x;
+                    const dy = p.y - p2.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance < 100) {
+                        ctx.beginPath();
+                        ctx.strokeStyle = `rgba(150, 150, 150, ${0.1 * (1 - distance / 100)})`;
+                        ctx.lineWidth = 1;
+                        ctx.moveTo(p.x, p.y);
+                        ctx.lineTo(p2.x, p2.y);
+                        ctx.stroke();
+                    }
+                }
+            });
+
+            requestAnimationFrame(animate);
+        }
+
+        window.addEventListener('resize', resize);
+        init();
+        animate();
+
+        // Smooth scroll for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                document.querySelector(this.getAttribute('href')).scrollIntoView({
+                    behavior: 'smooth'
+                });
+            });
+        });
+    </script>
+</body>
+
+</html>

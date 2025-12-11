@@ -1,12 +1,12 @@
 
-import { AlphaRevolve } from '../src/AlphaRevolve';
-import { LlmService } from '../src/llmService';
-import { FeedbackService } from '../src/feedbackService';
-import { ProgramDatabase } from '../src/ProgramDatabase';
-import { EvolutionConfig } from '../src/types';
+import { AlphaRevolve } from '../src/core/AlphaRevolve';
+import { LlmService } from '../src/core/llmService';
+import { FeedbackService } from '../src/core/feedbackService';
+import { ProgramDatabase } from '../src/core/ProgramDatabase';
+import { EvolutionConfig } from '../src/core/types';
 
 // Mock dependencies
-jest.mock('../src/ConsoleDisplay', () => {
+jest.mock('../src/core/ConsoleDisplay', () => {
     return {
         ConsoleDisplay: jest.fn().mockImplementation(() => ({
             displaySection: jest.fn(),
@@ -23,10 +23,10 @@ jest.mock('../src/ConsoleDisplay', () => {
     };
 });
 
-jest.mock('../src/llmService');
-jest.mock('../src/feedbackService');
-jest.mock('../src/ProgramDatabase');
-jest.mock('../src/logger');
+jest.mock('../src/core/llmService');
+jest.mock('../src/core/feedbackService');
+jest.mock('../src/core/ProgramDatabase');
+jest.mock('../src/core/logger');
 
 describe('AlphaRevolve', () => {
     let mockLlmService: jest.Mocked<LlmService>;

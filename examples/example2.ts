@@ -1,6 +1,6 @@
-import { AlphaRevolve } from '../src/AlphaRevolve';
-import { EvolutionConfig } from '../src/types';
-import { safeEval } from '../src/safeEval';
+import { AlphaRevolve } from '../src/core/AlphaRevolve';
+import { EvolutionConfig } from '../src/core/types';
+import { safeEval } from '../src/core/safeEval';
 import * as process from 'process';
 
 /**

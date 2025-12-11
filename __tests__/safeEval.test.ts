@@ -1,4 +1,4 @@
-import { safeEval } from '../src/safeEval';
+import { safeEval } from '../src/core/safeEval';
 
 describe('safeEval', () => {
   it('should evaluate a simple function', async () => {

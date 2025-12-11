@@ -1,5 +1,5 @@
-import { PromptBuilder } from '../src/promptBuilder';
-import { ProgramDatabase } from '../src/ProgramDatabase';
+import { PromptBuilder } from '../src/core/promptBuilder';
+import { ProgramDatabase } from '../src/core/ProgramDatabase';
 
 const config = {
   problemDescription: 'Test problem',

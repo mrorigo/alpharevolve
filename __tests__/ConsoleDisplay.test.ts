@@ -27,7 +27,7 @@ jest.mock('cli-progress', () => ({
   Presets: { shades_classic: {} }
 }));
 
-import { ConsoleDisplay } from '../src/ConsoleDisplay';
+import { ConsoleDisplay } from '../src/core/ConsoleDisplay';
 
 describe('ConsoleDisplay', () => {
   it('should instantiate and call display methods', () => {

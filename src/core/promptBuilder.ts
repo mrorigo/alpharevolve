@@ -42,8 +42,8 @@ export class PromptBuilder {
         const metrics = parentCandidate.fitness.performanceMetrics;
         const executionTimeMs = metrics.executionTime?.toFixed(2) || 'N/A';
         const heapUsedMB = (metrics.memoryUsage?.delta?.heapUsed / (1024 * 1024)).toFixed(2) || 'N/A';
-        const gcTime = metrics.gcStats?.totalTime?.toFixed(2) || 'N/A';
-        const gcCount = metrics.gcStats?.count || 'N/A';
+        const gcTime = metrics.gcStats?.totalTime !== undefined ? metrics.gcStats.totalTime.toFixed(2) : 'N/A';
+        const gcCount = metrics.gcStats?.count !== undefined ? metrics.gcStats.count : 'N/A';
 
         performanceInfo += `\n\nDetailed Performance Metrics:
 - Execution Time: ${executionTimeMs} ms

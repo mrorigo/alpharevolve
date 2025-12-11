@@ -186,11 +186,42 @@ export class AlphaRevolve {
    */
   private checkSyntax(solution: string): boolean {
     try {
-      // Using Function constructor to validate syntax without executing
-      new Function(solution);
+      // Use TypeScript compiler API to check syntax
+      // We import it dynamically to avoid hard dependency if possible, 
+      // but since we are in a TS environment, it should be available.
+      const ts = require('typescript');
+
+      const sourceFile = ts.createSourceFile(
+        'temp.ts',
+        solution,
+        ts.ScriptTarget.Latest,
+        true // setParentNodes
+      );
+
+      // Check for parse diagnostics
+      const diagnostics = sourceFile.parseDiagnostics; // checking for syntactic errors
+
+      if (diagnostics && diagnostics.length > 0) {
+        if (this.options.verbose) {
+          const message = ts.formatDiagnostics(diagnostics, {
+            getCanonicalFileName: (f: string) => f,
+            getCurrentDirectory: () => process.cwd(),
+            getNewLine: () => '\n'
+          });
+          console.log('Syntax Error Details:\n' + message);
+        }
+        return false;
+      }
+
       return true;
     } catch (error) {
-      return false;
+      // Fallback to basic JS check if TS is not available
+      try {
+        new Function(solution);
+        return true;
+      } catch (e) {
+        return false;
+      }
     }
   }
 

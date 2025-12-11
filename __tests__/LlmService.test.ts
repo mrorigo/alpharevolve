@@ -12,7 +12,7 @@ jest.mock('openai', () => {
   };
 });
 
-import { LlmService } from '../src/LlmService';
+import { LlmService } from '../src/core/llmService';
 
 describe('LlmService', () => {
   it('should generate code using the LLM', async () => {

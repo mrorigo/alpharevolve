@@ -1,4 +1,4 @@
-import { CodeExtractor } from '../src/CodeExtractor';
+import { CodeExtractor } from '../src/core/CodeExtractor';
 
 describe('CodeExtractor', () => {
   it('should extract code from markdown block', () => {

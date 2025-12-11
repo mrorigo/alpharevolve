@@ -1,12 +1,16 @@
 {
   "name": "alphaevolve",
-  "version": "1.0.0",
-  "main": "dist/index.js",
+  "version": "1.1.0",
+  "main": "dist/core/index.js",
+  "bin": {
+    "alpharevolve": "./dist/cli/index.js"
+  },
   "scripts": {
     "test": "jest",
-    "example1": "ts-node examples/example1.ts",
+    "example1": "npx ts-node src/cli/index.ts optimize examples/sort_target.ts --test examples/sort_benchmark.test.ts",
     "example2": "ts-node examples/example2.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "cli": "ts-node src/cli/index.ts"
   },
   "keywords": [
     "AI",
@@ -19,17 +23,21 @@
   "dependencies": {
     "chalk": "^4.1.2",
     "cli-progress": "^3.12.0",
+    "commander": "^14.0.2",
+    "cross-spawn": "^7.0.6",
     "openai": "^4.98.0"
   },
   "devDependencies": {
     "@types/chalk": "^0.4.31",
     "@types/cli-progress": "^3.11.6",
+    "@types/cross-spawn": "^6.0.6",
     "@types/jest": "^29.5.14",
     "@types/node": "^22.19.2",
     "jest": "^29.7.0",
+    "jest-environment-node": "^30.2.0",
     "ts-jest": "^29.1.1",
     "ts-node": "^10.9.2",
-    "typescript": "^5.8.3"
+    "typescript": "^5.9.3"
   },
   "description": "AlphaEvolve: An AI-powered evolutionary code optimizer."
 }

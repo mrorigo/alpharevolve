@@ -27,6 +27,7 @@ AlphaRevolve is a TypeScript framework that orchestrates a feedback-driven loop 
 
 ---
 
+
 ## ⚡️ Quickstart
 
 ### Prerequisites
@@ -41,133 +42,73 @@ AlphaRevolve is a TypeScript framework that orchestrates a feedback-driven loop 
 git clone https://github.com/mrorigo/alpharevolve.git
 cd alpharevolve
 npm install
+npm run build
 ```
 
 ---
 
-### Model Setup: How to Configure LLMs in the Examples
-### Advanced Configuration Options
+### Usage
 
-AlphaRevolve provides robust configuration options to tailor the evolution process:
-
-```ts
-// Example of evolution options
-const options = {
-  verbose: true,            // Enable detailed logging
-  saveResults: true,        // Save results to disk
-  runParallel: false,       // Run evaluations in parallel
-  maxRetries: 3,            // Number of retries for failed iterations
-  checkSyntaxBeforeEval: true, // Validate code syntax before execution
-  runId: "custom-run-id"    // Custom identifier for this run
-};
-
-const evolver = new AlphaRevolve(config, baseUrl, apiKey, options);
-```
-
-These options can be adjusted to balance performance, reliability, and verbosity.
-
-AlphaRevolve is model-agnostic, but **you must specify which LLM(s) to use in the config for each example**.
-The examples (`src/example1.ts`, `src/example2.ts`, etc.) includes `llmModel` and `feedbackLlmModel` fields in their config object.
-You also need to set the correct API credentials and base URL for your chosen model.
+AlphaRevolve can now be used directly via the CLI to optimize any TypeScript/JavaScript file in your project, using your existing test suites for feedback.
 
 #### 1. Set Your API Credentials
 
-- **OpenAI:**
-  ```bash
-  export OPENAI_API_KEY=your-openai-key
-  export OPENAI_BASE_URL=https://api.openai.com/v1
-  ```
-- **Ollama (local):**
-  ```bash
-  export OPENAI_API_KEY=ollama
-  export OPENAI_BASE_URL=http://localhost:11434/v1
-  ```
-- **Gemini:**
-  ```bash
-  export OPENAI_API_KEY=your-gemini-key
-  export OPENAI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
-  ```
-
-#### 2. Choose Your Model in the Example Configs
-
-Open `src/example1.ts`, `src/example2.ts`, or your own config file, and set the `llmModel` field:
-
-- **OpenAI:**
-  `'gpt-3.5-turbo'` or `'gpt-4'`
-- **Ollama:**
-  `'gemma3:12b-it-q8_0'` or any local model you've pulled
-- **Gemini:**
-  `'gemini-1.5-flash'`, `'gemini-1.5-pro'`, etc.
-
-You can also set `feedbackLlmModel` if you want to use a different model for feedback generation.
-
-**Example snippet from `src/example2.ts`:**
-```ts
-const config: EvolutionConfig = {
-  // Core configuration
-  initialSolution: initialCode,
-  fitnessFunction: evaluateCandidate,
-  problemDescription: 'Optimize prime number generation algorithm',
-  iterations: 10,
-
-  // LLM settings
-  llmModel: 'gemma3:12b-it-q8_0', // or 'gpt-3.5-turbo', 'gemini-1.5-flash', etc.
-  temperature: 0.8,              // Control creativity vs determinism
-  maxTokens: 4096,               // Maximum response length
-
-  // Feedback configuration
-  feedbackEnabled: true,
-  feedbackLlmModel: 'phi4-reasoning:latest', // Use different model for analysis
-  feedbackTemperature: 0.5,      // More deterministic for feedback
-
-  // Persistence options
-  databaseOptions: {
-    saveEnabled: true,
-    saveFrequency: 'iteration'   // Save after each iteration
-  }
-};
+```bash
+export OPENAI_API_KEY=your-api-key
+export OPENAI_BASE_URL=https://api.openai.com/v1 # Optional, defaults to OpenAI
 ```
 
----
+#### 2. Run the Optimizer
 
-### Run Evolution
+To optimize a file `src/my-algorithm.ts` using `src/my-algorithm.test.ts` for verification:
 
 ```bash
+npm run cli -- optimize src/my-algorithm.ts --test src/my-algorithm.test.ts --iterations 10 --model gpt-4
+```
+
+or if you have linked the package:
+
+```bash
+alpharevolve optimize src/my-algorithm.ts --test src/my-algorithm.test.ts
+```
+
+### Running Examples
+
+**1. Sorting Benchmark (CLI Mode)**
+Runs the CLI optimizer on a bubble sort implementation.
+
+```bash
+# Ensure OPENAI_API_KEY is set (and OPENAI_BASE_URL if using Ollama/vLLM)
+export OPENAI_API_KEY=your-key
+
+# Run via npm
 npm run example1
-# or
+
+# OR via Makefile
+make example1
+
+# OR manual command (for custom models/Ollama)
+npx ts-node src/cli/index.ts optimize examples/sort_target.ts \
+  --test examples/sort_benchmark.test.ts \
+  --iterations 5 \
+  --model gemma3:4b \
+  --base-url http://localhost:11434/v1 \
+  --api-key ollama
+```
+
+**2. Programmatic API Demo**
+Demonstrates how to use AlphaRevolve as a library in your own scripts.
+```bash
 npm run example2
 ```
 
 ---
 
-### Visualize Results
-
-- Open `index.html` in your browser.
-- Load a run from the `runs/` directory to explore every candidate, metric, prompt and feedback in your evolutionary journey.
-
----
-
 ## 🧩 What Can You Evolve?
 
-- **Classic Algorithm Optimization:**
-  Evolve a faster prime sieve, a smarter sort, or a more efficient search.
-
-- **Idiomatic Refactoring:**
-  Modernize legacy codebases—reward idiomatic APIs, penalize deprecated patterns.
-
-- **API & Framework Migration:**
-  Port from React to Vue, or AngularJS to Svelte, one safe step at a time.
-
-- **Warning & Lint Squashing:**
-  Fitness = “number of warnings fixed, tests still pass.”
-
-- **Security Hardening:**
-  Plug in a static analyzer and evolve toward zero vulnerabilities.
-
-- **Multi-Objective Evolution:**
-  Optimize for speed, readability, and security—all at once.
-
-If you can measure it, AlphaRevolve can evolve it.
+- **Classic Algorithm Optimization:** Evolve a faster prime sieve, a smarter sort, or a more efficient search.
+- **Idiomatic Refactoring:** Modernize legacy codebases—reward idiomatic APIs.
+- **Test-Driven Optimization:** Use your existing Jest/Vitest suites as the "Fitness Function". If the tests pass, AlphaRevolve tries to make the code faster or cleaner.
 
 ---
 
@@ -179,17 +120,9 @@ alpharevolve/
 ├── README.md
 ├── runs/            # Saved run histories (JSON)
 ├── src
-│  ├── AlphaRevolve.ts
-│  ├── CodeExtractor.ts
-│  ├── ConsoleDisplay.ts
-│  ├── FeedbackService.ts
-│  ├── LlmService.ts
-│  ├── ProgramDatabase.ts
-│  ├── PromptBuilder.ts
-│  ├── example1.ts
-│  ├── example2.ts
-│  ├── safeEval.ts
-│  └── types.ts
+│  ├── cli/          # CLI implementation
+│  └── core/         # Core evolution logic (AlphaRevolve, BenchmarkRunner, etc.)
+├── examples/        # Example targets and test suites
 ├── index.html       # Run Explorer (visualization)
 ├── package.json
 └── tsconfig.json
@@ -197,47 +130,15 @@ alpharevolve/
 
 ---
 
-## 📚 Examples
-## 🔒 Security Features
-
-AlphaRevolve includes multiple layers of security to safely execute and evaluate candidate solutions:
-
-- **Isolated Execution:** All code runs in separate Node.js worker threads
-- **Memory Limits:** Configurable memory caps prevent resource exhaustion
-- **Timeout Controls:** Maximum execution time for any candidate solution
-- **Clean File Handling:** Temporary files are automatically managed and cleaned up
-- **Code Validation:** Syntax checking before execution (optional)
-- **Error Isolation:** Failed executions can't affect the main evolution process
-
-These security features make AlphaRevolve suitable for both interactive development and automated CI/CD pipelines.
-
-- **Prime Sieve Optimization:**
-  See `src/example2.ts` for evolving a prime sieve algorithm.
-
-- **Sorting Algorithm Refinement:**
-  See `src/example1.ts` or `src/index.ts` for bubble sort optimization.
-
-- **Bring Your Own Problem:**
-  Swap in your own code, fitness function, and prompt. AlphaRevolve does the rest.
-  - **Memory-Safe Evolution:**
-    The enhanced `safeEval` system enforces memory limits and tracks detailed performance metrics.
-
-  - **Resilient Automation:**
-    Built-in retry mechanisms and error recovery make AlphaRevolve robust enough for long-running optimizations.
-
----
-
-## 📊 Performance Metrics & Analysis
 
 AlphaRevolve collects detailed metrics during evolution:
 
-- **Execution Performance:** Time, CPU usage, memory allocation
-- **Garbage Collection:** Count and duration of GC events
-- **Function Analysis:** Loop iterations and function call counts
-- **Quality Metrics:** Correctness and efficiency scores
-- **Evolution History:** Complete generation tracking with parent-child relationships
+- **Execution Performance:** Execution time and memory allocation (Heap, RSS).
+- **Garbage Collection:** Count and duration of GC events (via `perf_hooks`).
+- **Quality Metrics:** Correctness and efficiency scores based on your test suite.
+- **Evolution History:** Complete generation tracking with parent-child relationships.
 
-These metrics help you understand not just *what* improved in your code, but *why* it improved.
+*Note: Advanced metrics like CPU usage and loop iteration counts are available when using the programmatic `safeEval` API, but the CLI focus is on integration with standard Jest environments.*
 
 ## 🔄 Robust Error Handling
 

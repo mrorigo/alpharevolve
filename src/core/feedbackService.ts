@@ -145,13 +145,15 @@ Raw metrics: ${JSON.stringify(metrics, null, 2)}
   ): Promise<string> {
     try {
       // Define available replacements
+      // Define available replacements
+      // Keys should not include braces as PromptBuilder adds them
       const replacements: Record<string, string> = {
-        '{CODE}': code,
-        '{QUALITY_SCORE}': score.qualityScore.toFixed(4),
-        '{EFFICIENCY_SCORE}': score.efficiencyScore.toFixed(4),
-        '{FINAL_SCORE}': score.finalScore.toFixed(4),
-        '{PARENT_COMPARISON}': parentScore ? this.createParentComparison(score, parentScore) : "No parent comparison available.",
-        '{PERFORMANCE_DETAILS}': performanceMetrics ? this.formatPerformanceMetrics(performanceMetrics) : "No detailed performance metrics available."
+        'CODE': code,
+        'QUALITY_SCORE': score.qualityScore.toFixed(4),
+        'EFFICIENCY_SCORE': score.efficiencyScore.toFixed(4),
+        'FINAL_SCORE': score.finalScore.toFixed(4),
+        'PARENT_COMPARISON': parentScore ? this.createParentComparison(score, parentScore) : "No parent comparison available.",
+        'PERFORMANCE_DETAILS': performanceMetrics ? this.formatPerformanceMetrics(performanceMetrics) : "No detailed performance metrics available."
       };
 
       let templateToUse = this.defaultTemplate;

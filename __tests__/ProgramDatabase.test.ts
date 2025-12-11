@@ -1,4 +1,4 @@
-import { ProgramDatabase } from '../src/ProgramDatabase';
+import { ProgramDatabase } from '../src/core/ProgramDatabase';
 
 describe('ProgramDatabase', () => {
   it('should add and retrieve a candidate solution', () => {

@@ -568,6 +568,12 @@
         </div>
         <div class="features-grid">
             <div class="feature-card">
+                <div class="feature-icon">💻</div>
+                <h3>CLI-First Experience</h3>
+                <p>Optimize any file in your project with a single command. Integrating with your existing test suites
+                    has never been easier.</p>
+            </div>
+            <div class="feature-card">
                 <div class="feature-icon">🧬</div>
                 <h3>AI-Driven Evolution</h3>
                 <p>LLMs propose targeted improvements rather than random mutations, guiding the evolutionary process
@@ -576,26 +582,19 @@
             <div class="feature-card">
                 <div class="feature-icon">🛡️</div>
                 <h3>Safe Evaluation</h3>
-                <p>Every candidate runs in isolation (worker threads) with strict memory limits and timeouts. No rogue
-                    code crashes your app.</p>
+                <p>Every candidate runs in isolation with strict memory limits. No rogue code crashes your app.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">🎯</div>
-                <h3>Flexible Fitness</h3>
-                <p>Optimize for speed, memory, style, or security. If you can write a metric function for it, you can
-                    evolve it.</p>
+                <div class="feature-icon">📉</div>
+                <h3>Granular Metrics</h3>
+                <p>Track Garbage Collection counts, Heap usage deltas, and execution time with precision using our
+                    custom Jest environment.</p>
             </div>
             <div class="feature-card">
                 <div class="feature-icon">📊</div>
                 <h3>Full Visualization</h3>
                 <p>Explore the entire evolutionary tree. Track lineage, prompts, feedback, and performance metrics in
                     real-time.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">🔄</div>
-                <h3>Robust Recovery</h3>
-                <p>Built-in retries with exponential backoff and graceful failure handling ensure long-running
-                    optimizations complete.</p>
             </div>
             <div class="feature-card">
                 <div class="feature-icon">⚡</div>
@@ -642,38 +641,90 @@
                     <div class="dot red"></div>
                     <div class="dot yellow"></div>
                     <div class="dot green"></div>
-                    <span style="margin-left: 1rem; color: #888;">config.ts</span>
+                    <span style="margin-left: 1rem; color: #888;">Terminal</span>
                 </div>
                 <div class="code-content">
-                    <pre><code><span class="token keyword">const</span> config = {
-  <span class="token comment">// Core problem definition</span>
-  initialSolution: initialCode,
-  fitnessFunction: evaluateCandidate,
-  
-  <span class="token comment">// Evolution settings</span>
-  generations: 10,
-  populationSize: 5,
-  
-  <span class="token comment">// AI Configuration</span>
-  llmModel: <span class="token string">'gemini-1.5-pro'</span>, 
-  feedbackEnabled: <span class="token keyword">true</span>,
-  
-  <span class="token comment">// Safety</span>
-  sandbox: { memoryLimit: 512, timeout: 5000 }
-};
+                    <pre><code><span class="token comment"># Optimize your algorithm using an existing test suite</span>
+<span class="token function">alpharevolve</span> optimize src/sort_algo.ts \
+  --test src/sort_algo.test.ts \
+  --iterations 10 \
+  --model gpt-4o
 
-<span class="token keyword">const</span> evolver = <span class="token keyword">new</span> AlphaRevolve(config);
-<span class="token keyword">await</span> evolver.run();</code></pre>
+<span class="token comment"># Output:</span>
+<span class="token string">✔ Optimization Complete!</span>
+<span class="token keyword">Best Solution:</span>
+  Quality: 1.00 (Passed)
+  Efficiency: 0.92 (+45% Speedup)
+  Memory Delta: -8.2MB</code></pre>
                 </div>
             </div>
         </div>
+    </section>
+
+    <!-- Case Study Section -->
+    <section class="container section-padding" style="border-top: 1px solid var(--border-color);">
+        <div style="display: flex; align-items: center; gap: 4rem; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 300px;">
+                <span
+                    style="color: var(--accent-color); font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; font-size: 0.875rem;">Case
+                    Study</span>
+                <h2 style="font-size: 2.5rem; margin: 1rem 0;">From Bubble Sort to <br><span class="text-gradient">45%
+                        Faster Quicksort</span></h2>
+                <p style="color: var(--text-secondary); margin-bottom: 2rem;">
+                    In a recent run, AlphaRevolve automatically evolved a standard Bubble Sort into an optimized
+                    Iterative Quicksort.
+                    It navigated around "micro-optimization traps" (like manual stack management) and identified the
+                    algorithmic shift needed for massive gains.
+                </p>
+                <div style="display: flex; gap: 2rem;">
+                    <div>
+                        <div style="font-size: 2rem; font-weight: 700; color: white;">45%</div>
+                        <div style="color: var(--text-secondary); font-size: 0.9rem;">Speed Increase</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 2rem; font-weight: 700; color: white;">O(n log n)</div>
+                        <div style="color: var(--text-secondary); font-size: 0.9rem;">Complexity Achieved</div>
+                    </div>
+                </div>
+            </div>
+            <div style="flex: 1; min-width: 300px;">
+                <div class="code-window" style="margin-top: 0;">
+                    <div class="window-header">
+                        <span style="margin-left: 0.5rem; color: #888;">sort_target.optimized.ts</span>
+                    </div>
+                    <div class="code-content" style="max-height: 300px; overflow-y: auto;">
+                        <pre><code><span class="token keyword">export function</span> <span class="token function">sort</span>(arr: number[]): number[] {
+  <span class="token keyword">const</span> n = arr.length;
+  <span class="token keyword">if</span> (n < 2) <span class="token keyword">return</span> arr;
+
+  <span class="token comment">// Evolved: Explicit stack to avoid recursion overhead</span>
+  <span class="token keyword">const</span> stack = [{ low: 0, high: n - 1 }];
+
+  <span class="token keyword">while</span> (stack.length) {
+    <span class="token keyword">const</span> { low, high } = stack.pop()!;
+    
+    <span class="token comment">// Evolved: Hybrid approach using Insertion Sort for small partitions</span>
+    <span class="token keyword">if</span> (high - low + 1 <= 10) {
+      <span class="token function">insertionSort</span>(arr, low, high);
+      <span class="token keyword">continue</span>;
+    }
+    <span class="token comment">// ... (partitioning logic)</span>
+  }
+  <span class="token keyword">return</span> arr;
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </section>
 
     <section id="use-cases" class="container section-padding">
         <div class="use-cases">
             <div>
                 <h2>What Can You Evolve?</h2>
-                <p style="color: var(--text-secondary); margin: 1.5rem 0 2.5rem 0;">From classic algorithms to complex
+                <p style="color: var(--text-secondary); margin: 1.5rem 0 2.5rem 0;">From classic algorithms to
+                    complex
                     system migrations.</p>
 
                 <div class="use-case-list">
@@ -689,7 +740,8 @@
                         <div class="check-icon">✓</div>
                         <div>
                             <h4>Idiomatic Refactoring</h4>
-                            <p style="color: var(--text-secondary);">Modernize legacy codebases by rewarding idiomatic
+                            <p style="color: var(--text-secondary);">Modernize legacy codebases by rewarding
+                                idiomatic
                                 API usage.</p>
                         </div>
                     </div>

@@ -1,4 +1,4 @@
-import { EvolutionConfig, FilterOptions } from './types';
+import { CandidateSolution, EvolutionConfig, FilterOptions } from './types';
 import { ProgramDatabase } from './ProgramDatabase';
 
 /**
@@ -11,16 +11,19 @@ export class PromptBuilder {
    * @param config The evolution configuration.
    * @param evaluationDatabase The evaluation database.
    * @param filterOptions Optional FilterOptions to restrict candidate selection.
+   * @param parentCandidate Candidate selected by the caller for this iteration.
+   * When provided, it is used directly so prompt context matches recorded lineage.
    * @returns The constructed prompt string.
    */
   static buildPrompt(
     config: EvolutionConfig,
     evaluationDatabase: ProgramDatabase,
-    filterOptions?: FilterOptions
+    filterOptions?: FilterOptions,
+    parentCandidate?: CandidateSolution
   ): string {
-    const parentCandidate = evaluationDatabase.sampleProgram(3, filterOptions);
+    const candidate = parentCandidate ?? evaluationDatabase.sampleProgram(3, filterOptions);
 
-    if (!parentCandidate) {
+    if (!candidate) {
       // Use the initial solution if no candidate exists.
       return this.formatPromptTemplate(config.promptTemplate, {
         PROBLEM_DESCRIPTION: config.problemDescription,
@@ -32,14 +35,14 @@ export class PromptBuilder {
 
     // Format performance information using the candidate's fitness metrics.
     let performanceInfo = `Current performance metrics (baseline = 1.0):
-- Quality Score: ${parentCandidate.fitness.qualityScore.toFixed(3)}
-- Efficiency Score: ${parentCandidate.fitness.efficiencyScore.toFixed(3)}
-- Final Score: ${parentCandidate.fitness.finalScore.toFixed(3)}`;
+- Quality Score: ${candidate.fitness.qualityScore.toFixed(3)}
+- Efficiency Score: ${candidate.fitness.efficiencyScore.toFixed(3)}
+- Final Score: ${candidate.fitness.finalScore.toFixed(3)}`;
 
     // Add detailed performance metrics if available
-    if (parentCandidate.fitness.performanceMetrics) {
+    if (candidate.fitness.performanceMetrics) {
       try {
-        const metrics = parentCandidate.fitness.performanceMetrics;
+        const metrics = candidate.fitness.performanceMetrics;
         const executionTimeMs = metrics.executionTime?.toFixed(2) || 'N/A';
         const heapUsedMB = (metrics.memoryUsage?.delta?.heapUsed / (1024 * 1024)).toFixed(2) || 'N/A';
         const gcTime = metrics.gcStats?.totalTime !== undefined ? metrics.gcStats.totalTime.toFixed(2) : 'N/A';
@@ -55,13 +58,13 @@ export class PromptBuilder {
       }
     }
 
-    const previousFeedback = parentCandidate.feedback
-      ? `Previous Feedback:\n${parentCandidate.feedback}\n\nConsider all previous feedback when proposing improvements.`
+    const previousFeedback = candidate.feedback
+      ? `Previous Feedback:\n${candidate.feedback}\n\nConsider all previous feedback when proposing improvements.`
       : "";
 
     return this.formatPromptTemplate(config.promptTemplate, {
       PROBLEM_DESCRIPTION: config.problemDescription,
-      CURRENT_SOLUTION: parentCandidate.solution,
+      CURRENT_SOLUTION: candidate.solution,
       PERFORMANCE_INFO: performanceInfo,
       PREVIOUS_FEEDBACK: previousFeedback,
     });

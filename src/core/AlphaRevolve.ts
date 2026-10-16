@@ -244,7 +244,12 @@ export class AlphaRevolve {
 
     try {
       // Build prompt for the LLM, passing filterOptions if provided
-      const prompt = PromptBuilder.buildPrompt(this.config, this.evaluationDatabase, filterOptions);
+      const prompt = PromptBuilder.buildPrompt(
+        this.config,
+        this.evaluationDatabase,
+        filterOptions,
+        parentCandidate
+      );
 
       if (this.options.verbose) {
         this.display.displaySection('Prompt Preview');

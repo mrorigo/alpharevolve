@@ -1,6 +1,7 @@
 import { spawn } from 'cross-spawn';
 import * as fs from 'fs';
-import * as path from 'path'; import { FitnessScores } from './types';
+import * as path from 'path';
+import { FitnessScores } from './types';
 import { Logger } from './logger';
 
 export interface BenchmarkOptions {

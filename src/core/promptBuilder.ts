@@ -88,7 +88,8 @@ export class PromptBuilder {
     // Replace each placeholder with its value
     for (const [key, value] of Object.entries(values)) {
       const placeholder = new RegExp(`\\{${key}\\}`, 'g');
-      result = result.replace(placeholder, value || '');
+      // Insert source text literally; replacement strings interpret `$&` and related tokens.
+      result = result.replace(placeholder, () => value ?? '');
     }
 
     // Handle any remaining unmatched placeholders

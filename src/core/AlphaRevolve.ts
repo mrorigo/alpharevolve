@@ -56,19 +56,19 @@ export class AlphaRevolve {
   ) {
     this.config = {
       ...config,
-      temperature: config.temperature || 0.7,
-      maxTokens: config.maxTokens || 4096,
+      temperature: config.temperature ?? 0.7,
+      maxTokens: config.maxTokens ?? 4096,
       feedbackEnabled: config.feedbackEnabled !== false,
-      feedbackTemperature: config.feedbackTemperature || 0.5,
-      feedbackMaxTokens: config.feedbackMaxTokens || 2048
+      feedbackTemperature: config.feedbackTemperature ?? 0.5,
+      feedbackMaxTokens: config.feedbackMaxTokens ?? 2048
     };
 
     // Default options merged with user-provided options
     this.options = {
       verbose: options.verbose !== false,
       saveResults: options.saveResults !== false,
-      runParallel: options.runParallel || false,
-      maxRetries: options.maxRetries || 3,
+      runParallel: options.runParallel ?? false,
+      maxRetries: options.maxRetries ?? 3,
       checkSyntaxBeforeEval: options.checkSyntaxBeforeEval !== false,
       ...options
     };

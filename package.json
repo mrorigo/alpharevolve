@@ -10,6 +10,7 @@
     "example1": "npx ts-node src/cli/index.ts optimize examples/sort_target.ts --test examples/sort_benchmark.test.ts",
     "example2": "ts-node examples/example2.ts",
     "recovery-demo": "ts-node examples/recovery_demo.ts",
+    "sandbox-acceptance": "ts-node examples/sandbox_acceptance.ts",
     "build": "tsc",
     "cli": "ts-node src/cli/index.ts"
   },

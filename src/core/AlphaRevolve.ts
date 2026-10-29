@@ -1,4 +1,12 @@
-import { EvolutionResult, EvolutionConfig, CandidateSolution, EvolutionOptions, FilterOptions } from './types';
+import {
+  CandidateSolution,
+  EvaluationResult,
+  EvolutionConfig,
+  EvolutionOptions,
+  EvolutionResult,
+  FilterOptions,
+  FitnessScores,
+} from './types';
 import { ProgramDatabase } from './ProgramDatabase';
 import { LlmService } from './llmService';
 import { PromptBuilder } from './promptBuilder';
@@ -9,6 +17,50 @@ import * as fs from 'fs';
 import { Logger } from './logger';
 import chalk from 'chalk';
 import { ConsoleDisplay } from './ConsoleDisplay';
+
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? (sorted[middle - 1] + sorted[middle]) / 2
+    : sorted[middle];
+}
+
+function aggregateValues(values: any[]): any {
+  const present = values.filter(value => value !== undefined && value !== null);
+  if (present.length === 0) return undefined;
+  if (present.every(value => typeof value === 'number' && Number.isFinite(value))) {
+    return median(present);
+  }
+  if (present.every(value => value && typeof value === 'object' && !Array.isArray(value))) {
+    const keys = Array.from(new Set(present.flatMap(value => Object.keys(value))));
+    return keys.reduce((result, key) => {
+      result[key] = aggregateValues(present.map(value => value[key]));
+      return result;
+    }, {} as Record<string, any>);
+  }
+  return present[0];
+}
+
+function normalizeEvaluation(result: any): EvaluationResult {
+  if (result && result.status === 'invalid') {
+    if (typeof result.reason !== 'string' || result.reason.trim() === '') {
+      throw new Error('Invalid evaluation results must include a non-empty reason');
+    }
+    return { status: 'invalid', reason: result.reason };
+  }
+
+  const fitness = result && result.status === 'valid' ? result.fitness : result;
+  if (!fitness || typeof fitness !== 'object') {
+    throw new Error('Fitness function must return scores or an explicit evaluation result');
+  }
+  for (const key of ['qualityScore', 'efficiencyScore', 'finalScore']) {
+    if (typeof fitness[key] !== 'number' || !Number.isFinite(fitness[key])) {
+      throw new Error(`Fitness function returned an invalid ${key}: ${String(fitness[key])}`);
+    }
+  }
+  return { status: 'valid', fitness };
+}
 
 /**
  * AlphaRevolve orchestrates evolutionary optimization of candidate solutions using LLMs.
@@ -60,8 +112,22 @@ export class AlphaRevolve {
       maxTokens: config.maxTokens ?? 4096,
       feedbackEnabled: config.feedbackEnabled !== false,
       feedbackTemperature: config.feedbackTemperature ?? 0.5,
-      feedbackMaxTokens: config.feedbackMaxTokens ?? 2048
+      feedbackMaxTokens: config.feedbackMaxTokens ?? 2048,
+      higherIsBetter: config.higherIsBetter ?? true,
+      evaluationRepeats: config.evaluationRepeats ?? 1,
+      minImprovement: config.minImprovement ?? 0,
+      noiseToleranceMultiplier: config.noiseToleranceMultiplier ?? 1,
     };
+
+    if (!Number.isInteger(this.config.evaluationRepeats) || this.config.evaluationRepeats! < 1) {
+      throw new Error('evaluationRepeats must be a positive integer');
+    }
+    for (const key of ['minImprovement', 'noiseToleranceMultiplier'] as const) {
+      const value = this.config[key]!;
+      if (!Number.isFinite(value) || value < 0) {
+        throw new Error(`${key} must be a finite non-negative number`);
+      }
+    }
 
     // Default options merged with user-provided options
     this.options = {
@@ -77,6 +143,11 @@ export class AlphaRevolve {
     this.llmService = llmService || new LlmService(baseUrl, apiKey);
     this.feedbackService = feedbackService || new FeedbackService(baseUrl, apiKey);
     this.evaluationDatabase = evaluationDatabase || new ProgramDatabase();
+    this.evaluationDatabase.configureSelection({
+      higherIsBetter: this.config.higherIsBetter!,
+      minImprovement: this.config.minImprovement!,
+      noiseToleranceMultiplier: this.config.noiseToleranceMultiplier!,
+    });
 
     // Initialize database with metadata
     this.initializeDatabase();
@@ -93,10 +164,48 @@ export class AlphaRevolve {
     this.evaluationDatabase.setMetadata('config', {
       iterations: this.config.iterations,
       llmModel: this.config.llmModel,
+      scoreWeights: this.config.scoreWeights,
+      higherIsBetter: this.config.higherIsBetter,
+      evaluationRepeats: this.config.evaluationRepeats,
+      minImprovement: this.config.minImprovement,
+      noiseToleranceMultiplier: this.config.noiseToleranceMultiplier,
       feedbackEnabled: this.config.feedbackEnabled,
       feedbackLlmModel: this.config.feedbackLlmModel,
     });
     this.evaluationDatabase.setMetadata('options', this.options);
+  }
+
+  private async evaluateSolution(solution: string): Promise<{
+    fitness: FitnessScores;
+    evaluation: NonNullable<CandidateSolution['evaluation']>;
+  }> {
+    const runs: EvaluationResult[] = [];
+    for (let index = 0; index < this.config.evaluationRepeats!; index++) {
+      runs.push(normalizeEvaluation(await this.config.fitnessFunction(solution)));
+    }
+
+    const validRuns = runs.filter(
+      (run): run is { status: 'valid'; fitness: FitnessScores } => run.status === 'valid'
+    );
+    const values = validRuns.map(run => run.fitness.finalScore);
+    const centre = values.length ? median(values) : 0;
+    const finalScoreMad = values.length
+      ? median(values.map(value => Math.abs(value - centre)))
+      : 0;
+    const invalidRun = runs.find((run): run is { status: 'invalid'; reason: string } => run.status === 'invalid');
+    const fitness = validRuns.length
+      ? aggregateValues(validRuns.map(run => run.fitness)) as FitnessScores
+      : { qualityScore: 0, efficiencyScore: 0, finalScore: 0 };
+
+    return {
+      fitness,
+      evaluation: {
+        status: invalidRun ? 'invalid' : 'valid',
+        reason: invalidRun?.reason,
+        runs,
+        finalScoreMad,
+      },
+    };
   }
 
   /**
@@ -305,7 +414,12 @@ export class AlphaRevolve {
         console.log('🧪 Evaluating generated solution...');
       }
 
-      const childFitness = await this.config.fitnessFunction(childSolution);
+      const childResult = await this.evaluateSolution(childSolution);
+      const childFitness = childResult.fitness;
+
+      if (childResult.evaluation.status === 'invalid') {
+        this.display.displayError(`Candidate rejected: ${childResult.evaluation.reason}`);
+      }
 
       this.display.displayComparison(parentCandidate.fitness, childFitness);
       this.display.displayFitnessMetrics(childFitness);
@@ -313,7 +427,7 @@ export class AlphaRevolve {
       // Generate feedback if enabled, and fitness > 0
       let feedback: string | undefined;
       let feedbackPrompt = '';
-      if (this.config.feedbackEnabled) {
+      if (this.config.feedbackEnabled && childResult.evaluation.status === 'valid') {
         if (this.options.verbose) {
           Logger.info(`💬 Generating feedback using ${this.config.feedbackLlmModel || this.config.llmModel}...`);
         }
@@ -333,7 +447,8 @@ export class AlphaRevolve {
             this.config.feedbackLlmModel || this.config.llmModel,
             this.config.feedbackTemperature,
             this.config.feedbackMaxTokens,
-            this.config.feedbackSystemPrompt // pass feedbackSystemPrompt for feedback LLM
+            this.config.feedbackSystemPrompt, // pass feedbackSystemPrompt for feedback LLM
+            this.config.higherIsBetter
           );
 
           if (this.options.verbose) {
@@ -365,7 +480,8 @@ export class AlphaRevolve {
         parentCandidate.id,
         feedback,
         prompt, // Save the generation prompt
-        feedback ? feedbackPrompt : undefined // Save the feedback prompt if feedback exists
+        feedback ? feedbackPrompt : undefined, // Save the feedback prompt if feedback exists
+        childResult.evaluation
       );
     } catch (error) {
       console.error(`Error in iteration ${iteration + 1}:`, error);
@@ -385,28 +501,24 @@ export class AlphaRevolve {
       this.display.displaySuccess('Evaluating initial solution...');
 
       // Evaluate the initial solution
-      const initialFitness = await this.config.fitnessFunction(this.config.initialSolution);
-
-      // Make a deep copy of initialFitness
-      const fitnessCopy = {
-        ...initialFitness,
-        // Ensure the required properties exist (defensive programming)
-        qualityScore: initialFitness.qualityScore,
-        efficiencyScore: initialFitness.efficiencyScore,
-        finalScore: initialFitness.finalScore
-      };
-
-      // Handle performance metrics specifically to ensure proper copying
-      if ('performanceMetrics' in initialFitness) {
-        fitnessCopy.performanceMetrics = JSON.parse(
-          JSON.stringify(initialFitness.performanceMetrics)
-        );
-      }
+      const initialResult = await this.evaluateSolution(this.config.initialSolution);
 
       // Add initial solution to the database
-      this.evaluationDatabase.addProgram(this.config.initialSolution, fitnessCopy, 0);
+      this.evaluationDatabase.addProgram(
+        this.config.initialSolution,
+        initialResult.fitness,
+        0,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        initialResult.evaluation
+      );
 
-      this.display.displayFitnessMetrics(initialFitness);
+      this.display.displayFitnessMetrics(initialResult.fitness);
+      if (initialResult.evaluation.status === 'invalid') {
+        throw new Error(`Initial solution is invalid: ${initialResult.evaluation.reason}`);
+      }
 
       // Run the evolution for specified iterations
       this.display.initProgressBar(this.config.iterations);

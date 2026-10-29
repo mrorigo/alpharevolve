@@ -20,6 +20,28 @@ export interface FitnessScores {
   [key: string]: any;
 }
 
+/** A candidate that the evaluator ran successfully but rejected. */
+export interface InvalidEvaluation {
+  status: 'invalid';
+  reason: string;
+}
+
+/** Explicit result form for evaluators; plain FitnessScores remain supported. */
+export type EvaluationResult =
+  | { status: 'valid'; fitness: FitnessScores }
+  | InvalidEvaluation;
+
+export type FitnessFunctionResult = FitnessScores | EvaluationResult;
+
+/** Persisted evaluation status and the raw scores used to form the median. */
+export interface CandidateEvaluation {
+  status: 'valid' | 'invalid';
+  reason?: string;
+  runs: EvaluationResult[];
+  /** Median absolute deviation of finalScore across valid runs. */
+  finalScoreMad: number;
+}
+
 /**
  * Represents a candidate solution evolved during optimization.
  */
@@ -30,6 +52,8 @@ export interface CandidateSolution {
   solution: string;
   /** Evaluation fitness metrics */
   fitness: FitnessScores;
+  /** Missing on older database records; those records are treated as valid. */
+  evaluation?: CandidateEvaluation;
   /** Evolution iteration number */
   iteration: number;
   /** ID of parent solution (undefined for initial solutions) */
@@ -106,17 +130,32 @@ export interface EvolutionConfig {
   feedbackSystemPrompt?: string;
 
   /**
-   * A fitness function that evaluates a candidate solution.
-   * Should return scores like qualityScore, efficiencyScore, and a combined finalScore,
-   * along with optional performance metrics.
+   * A fitness function that evaluates a candidate solution. It may return
+   * finite scores directly (legacy form), an explicit valid result, or an
+   * invalid result with a reason. Throw only when the evaluator itself failed.
    */
-  fitnessFunction: (solution: string) => Promise<FitnessScores>;
+  fitnessFunction: (solution: string) => Promise<FitnessFunctionResult>;
 
   /** A human-readable description of the problem */
   problemDescription: string;
 
   /** Number of iterations for the evolutionary optimization process */
   iterations: number;
+
+  /** Whether larger finalScore values are better. Defaults to true. */
+  higherIsBetter?: boolean;
+
+  /** Number of independent fitness evaluations per candidate. Defaults to 1. */
+  evaluationRepeats?: number;
+
+  /** Absolute improvement floor before replacing the current best candidate. */
+  minImprovement?: number;
+
+  /** Multiplier for the larger of incumbent/challenger score MADs. Defaults to 1. */
+  noiseToleranceMultiplier?: number;
+
+  /** Weights used by the built-in CLI benchmark scorer. */
+  scoreWeights?: { quality: number; efficiency: number };
 
   /** LLM model name for candidate solution generation */
   llmModel: string;

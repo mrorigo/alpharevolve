@@ -1,4 +1,4 @@
-import { CandidateSolution, FilterOptions } from './types';
+import { CandidateEvaluation, CandidateSolution, FilterOptions } from './types';
 import crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -24,6 +24,46 @@ export class ProgramDatabase {
   private metadata: Record<string, any> = {};
   private bestProgramId: string | null = null;
   private readonly dbVersion: string = '1.1';
+  private higherIsBetter = true;
+  private minImprovement = 0;
+  private noiseToleranceMultiplier = 1;
+
+  /** Configure score ordering and the measured-noise acceptance band. */
+  configureSelection(options: {
+    higherIsBetter: boolean;
+    minImprovement: number;
+    noiseToleranceMultiplier: number;
+  }): void {
+    this.higherIsBetter = options.higherIsBetter;
+    this.minImprovement = options.minImprovement;
+    this.noiseToleranceMultiplier = options.noiseToleranceMultiplier;
+    this.bestProgramId = null;
+    for (const candidate of this.programs.values()) this.considerBest(candidate);
+  }
+
+  private isValid(candidate: CandidateSolution): boolean {
+    return candidate.evaluation?.status !== 'invalid';
+  }
+
+  private considerBest(candidate: CandidateSolution): void {
+    if (!this.isValid(candidate)) return;
+    const incumbent = this.bestProgramId ? this.programs.get(this.bestProgramId) : undefined;
+    if (!incumbent || !this.isValid(incumbent)) {
+      this.bestProgramId = candidate.id;
+      return;
+    }
+
+    const improvement = this.higherIsBetter
+      ? candidate.fitness.finalScore - incumbent.fitness.finalScore
+      : incumbent.fitness.finalScore - candidate.fitness.finalScore;
+    const noiseBand = this.noiseToleranceMultiplier * Math.max(
+      candidate.evaluation?.finalScoreMad ?? 0,
+      incumbent.evaluation?.finalScoreMad ?? 0
+    );
+    if (improvement > Math.max(this.minImprovement, noiseBand)) {
+      this.bestProgramId = candidate.id;
+    }
+  }
 
   /**
    * Adds a candidate solution to the database.
@@ -41,7 +81,8 @@ export class ProgramDatabase {
     parentId?: string,
     feedback?: string,
     generationPrompt?: string,
-    feedbackPrompt?: string
+    feedbackPrompt?: string,
+    evaluation?: CandidateEvaluation
   ): CandidateSolution {
     // Generate a unique ID using both random bytes and timestamp
     const timestamp = new Date();
@@ -64,6 +105,7 @@ export class ProgramDatabase {
       iteration,
       parent: parentId,
       timestamp,
+      evaluation: evaluation ? JSON.parse(JSON.stringify(evaluation)) : undefined,
       feedback,
       generationPrompt,
       feedbackPrompt
@@ -71,14 +113,7 @@ export class ProgramDatabase {
 
     this.programs.set(id, candidate);
 
-    // Update best program tracking if needed
-    if (
-      this.bestProgramId === null ||
-      !this.getProgram(this.bestProgramId) ||
-      (fitnessCopy.finalScore > (this.getProgram(this.bestProgramId)?.fitness.finalScore || 0))
-    ) {
-      this.bestProgramId = id;
-    }
+    this.considerBest(candidate);
 
     return candidate;
   }
@@ -101,12 +136,16 @@ export class ProgramDatabase {
 
     // Use tracked best program ID if available
     if (this.bestProgramId && this.programs.has(this.bestProgramId)) {
-      return this.programs.get(this.bestProgramId) || null;
+      const best = this.programs.get(this.bestProgramId)!;
+      if (this.isValid(best)) return best;
     }
 
     // Fallback: Find best program by sorting
     return this.getAllPrograms()
-      .sort((a, b) => b.fitness.finalScore - a.fitness.finalScore)[0] || null;
+      .filter(candidate => this.isValid(candidate))
+      .sort((a, b) => this.higherIsBetter
+        ? b.fitness.finalScore - a.fitness.finalScore
+        : a.fitness.finalScore - b.fitness.finalScore)[0] || null;
   }
 
   /**
@@ -119,10 +158,12 @@ export class ProgramDatabase {
     if (this.programs.size === 0) return null;
 
     // Use filterPrograms for flexible filtering
-    const filtered = this.filterPrograms(filterOptions || { minFinalScore: 0 });
+    const filtered = this.filterPrograms(filterOptions || {}).filter(candidate => this.isValid(candidate));
 
     // Sort by fitness
-    const sorted = filtered.sort((a, b) => b.fitness.finalScore - a.fitness.finalScore);
+    const sorted = filtered.sort((a, b) => this.higherIsBetter
+      ? b.fitness.finalScore - a.fitness.finalScore
+      : a.fitness.finalScore - b.fitness.finalScore);
 
     // Take the top N (or fewer if there aren't enough)
     const topCandidates = sorted.slice(0, Math.min(topN, sorted.length));

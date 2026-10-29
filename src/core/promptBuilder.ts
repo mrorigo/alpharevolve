@@ -34,10 +34,11 @@ export class PromptBuilder {
     }
 
     // Format performance information using the candidate's fitness metrics.
-    let performanceInfo = `Current performance metrics (baseline = 1.0):
+    let performanceInfo = `Current performance metrics:
 - Quality Score: ${candidate.fitness.qualityScore.toFixed(3)}
 - Efficiency Score: ${candidate.fitness.efficiencyScore.toFixed(3)}
-- Final Score: ${candidate.fitness.finalScore.toFixed(3)}`;
+- Final Score: ${candidate.fitness.finalScore.toFixed(3)}
+- Final score direction: ${config.higherIsBetter === false ? 'lower is better' : 'higher is better'}`;
 
     // Add detailed performance metrics if available
     if (candidate.fitness.performanceMetrics) {

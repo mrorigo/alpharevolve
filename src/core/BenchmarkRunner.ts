@@ -1,7 +1,7 @@
 import { spawn } from 'cross-spawn';
 import * as fs from 'fs';
 import * as path from 'path';
-import { FitnessScores } from './types';
+import { FitnessFunctionResult } from './types';
 import { Logger } from './logger';
 
 export interface BenchmarkOptions {
@@ -13,6 +13,9 @@ export interface BenchmarkOptions {
     testCommand?: string;
     /** Optional extra arguments for the test command */
     testArgs?: string[];
+    /** Relative weights for correctness and execution efficiency. */
+    qualityWeight?: number;
+    efficiencyWeight?: number;
 }
 
 export class BenchmarkRunner {
@@ -23,6 +26,12 @@ export class BenchmarkRunner {
         this.options = options;
         this.options.testCommand = options.testCommand || 'npx';
         this.options.testArgs = options.testArgs || ['jest'];
+        this.options.qualityWeight = options.qualityWeight ?? 0.7;
+        this.options.efficiencyWeight = options.efficiencyWeight ?? 0.3;
+        const weights = [this.options.qualityWeight, this.options.efficiencyWeight];
+        if (weights.some(weight => !Number.isFinite(weight) || weight! < 0) || weights.every(weight => weight === 0)) {
+            throw new Error('Score weights must be finite, non-negative, and at least one must be positive');
+        }
     }
 
     /**
@@ -46,7 +55,7 @@ export class BenchmarkRunner {
     /**
      * Evaluates a candidate solution by running the test suite
      */
-    public async evaluate(solution: string): Promise<FitnessScores> {
+    public async evaluate(solution: string): Promise<FitnessFunctionResult> {
         // 1. Backup
         if (this.originalContent === null) {
             this.backupOriginal();
@@ -112,7 +121,15 @@ export class BenchmarkRunner {
             // For now, keep simple time-based, but we *record* detailed metrics for the LLM.
             const efficiencyScore = passed ? (1000 / (1000 + executionTime)) : 0;
 
-            const finalScore = (qualityScore * 0.7) + (efficiencyScore * 0.3);
+            const totalWeight = this.options.qualityWeight! + this.options.efficiencyWeight!;
+            const finalScore = (
+                qualityScore * this.options.qualityWeight! +
+                efficiencyScore * this.options.efficiencyWeight!
+            ) / totalWeight;
+
+            if (!passed) {
+                return { status: 'invalid', reason: 'The configured test suite failed' };
+            }
 
             return {
                 qualityScore,
@@ -126,11 +143,7 @@ export class BenchmarkRunner {
             // Cleanup metrics file if exists
             if (fs.existsSync(metricsPath)) { try { fs.unlinkSync(metricsPath); } catch (e) { } }
 
-            return {
-                qualityScore: 0,
-                efficiencyScore: 0,
-                finalScore: 0
-            };
+            throw new Error(`Benchmark evaluation failed: ${error instanceof Error ? error.message : String(error)}`);
         } finally {
             // 6. Restore
             this.restoreOriginal();
@@ -138,7 +151,7 @@ export class BenchmarkRunner {
     }
 
     private runTests(metricsPath: string): Promise<boolean> {
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
             // Locate our custom environment
             // Jest needs a JS file for the environment, even if using ts-jest, 
             // unless we jump through hoops. We rely on the build output.
@@ -171,7 +184,7 @@ export class BenchmarkRunner {
 
             child.on('error', (err: Error) => {
                 Logger.error('Failed to start test process', err);
-                resolve(false);
+                reject(err);
             });
         });
     }

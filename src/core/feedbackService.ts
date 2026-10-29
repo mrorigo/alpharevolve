@@ -31,6 +31,7 @@ Performance Metrics:
 - Quality Score: {QUALITY_SCORE}
 - Efficiency Score: {EFFICIENCY_SCORE}
 - Final Score: {FINAL_SCORE}
+- Final score direction: {SCORE_DIRECTION}
 
 {PARENT_COMPARISON}
 
@@ -98,11 +99,15 @@ Raw metrics: ${JSON.stringify(metrics, null, 2)}
    * @param parent Parent solution scores
    * @returns A markdown-formatted comparison string
    */
-  private createParentComparison(current: ScoreMetrics, parent: ScoreMetrics): string {
+  private createParentComparison(
+    current: ScoreMetrics,
+    parent: ScoreMetrics,
+    higherIsBetter: boolean
+  ): string {
     const finalScoreDiff = current.finalScore - parent.finalScore;
-    // Avoid division by zero
-    const denominator = Math.abs(parent.finalScore) < 0.0001 ? 0.0001 : parent.finalScore;
-    const percentChange = (finalScoreDiff / denominator) * 100;
+    const finalImprovement = higherIsBetter ? finalScoreDiff : -finalScoreDiff;
+    const denominator = Math.max(Math.abs(parent.finalScore), 0.0001);
+    const percentChange = (finalImprovement / denominator) * 100;
 
     const qualityChange = current.qualityScore - parent.qualityScore;
     const qualityArrow = qualityChange > 0 ? '↑' : qualityChange < 0 ? '↓' : '→';
@@ -110,7 +115,7 @@ Raw metrics: ${JSON.stringify(metrics, null, 2)}
     const efficiencyChange = current.efficiencyScore - parent.efficiencyScore;
     const efficiencyArrow = efficiencyChange > 0 ? '↑' : efficiencyChange < 0 ? '↓' : '→';
 
-    const finalScoreArrow = finalScoreDiff > 0 ? '↑' : finalScoreDiff < 0 ? '↓' : '→';
+    const finalScoreArrow = finalImprovement > 0 ? '↑' : finalImprovement < 0 ? '↓' : '→';
 
     return `
 ## Comparison with Parent Solution:
@@ -141,7 +146,8 @@ Raw metrics: ${JSON.stringify(metrics, null, 2)}
     model: string = 'gpt-3.5-turbo',
     temperature: number = 0.7,
     maxTokens: number = 1024,
-    feedbackSystemPrompt?: string // renamed for clarity
+    feedbackSystemPrompt?: string, // renamed for clarity
+    higherIsBetter: boolean = true
   ): Promise<string> {
     try {
       // Define available replacements
@@ -152,7 +158,10 @@ Raw metrics: ${JSON.stringify(metrics, null, 2)}
         'QUALITY_SCORE': score.qualityScore.toFixed(4),
         'EFFICIENCY_SCORE': score.efficiencyScore.toFixed(4),
         'FINAL_SCORE': score.finalScore.toFixed(4),
-        'PARENT_COMPARISON': parentScore ? this.createParentComparison(score, parentScore) : "No parent comparison available.",
+        'SCORE_DIRECTION': higherIsBetter ? 'higher is better' : 'lower is better',
+        'PARENT_COMPARISON': parentScore
+          ? this.createParentComparison(score, parentScore, higherIsBetter)
+          : "No parent comparison available.",
         'PERFORMANCE_DETAILS': performanceMetrics ? this.formatPerformanceMetrics(performanceMetrics) : "No detailed performance metrics available."
       };
 

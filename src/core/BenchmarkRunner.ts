@@ -177,14 +177,23 @@ export class BenchmarkRunner {
             cwd: workspace.root,
             env,
             timeoutMs: this.options.timeoutMs,
-            stdio: 'inherit',
+            stdio: 'pipe',
+            maxOutputBytes: 4 * 1024 * 1024,
         });
 
+        if (result.stdout) process.stdout.write(result.stdout);
+        if (result.stderr) process.stderr.write(result.stderr);
+
+        if (/sandbox_(?:apply|init)|operation not permitted/i.test(result.stderr)) {
+            throw new Error(`The operating system could not apply the requested evaluation sandbox: ${result.stderr.trim()}`);
+        }
+
         if (result.timedOut) {
-            return { passed: false, reason: `Test suite timed out after ${this.options.timeoutMs}ms` };
+            return { passed: false, reason: `Test suite timed out after ${this.options.timeoutMs}ms${result.stderr ? `: ${result.stderr.trim()}` : ''}` };
         }
         if (result.exitCode !== 0) {
-            return { passed: false, reason: `Test suite exited with code ${String(result.exitCode)}` };
+            const detail = result.stderr.trim();
+            return { passed: false, reason: `Test suite exited with code ${String(result.exitCode)}${detail ? `: ${detail.slice(-2000)}` : ''}` };
         }
         return { passed: true, reason: '' };
     }

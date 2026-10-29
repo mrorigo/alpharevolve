@@ -111,8 +111,11 @@ export async function safeEval(
       cwd: workspace, env, timeoutMs: timeout, stdio: 'pipe', extraOutput: true, input: payload,
     });
     if (result.timedOut) throw new Error(`Evaluation timed out after ${timeout}ms`);
+    if (/sandbox_(?:apply|init)|operation not permitted/i.test(result.stderr)) {
+      throw new Error(`The operating system could not apply the requested evaluation sandbox: ${result.stderr.trim()}`);
+    }
     if (!result.extraOutput) throw new Error(`Evaluation process returned no result${result.stderr ? `: ${result.stderr}` : ''}`);
-    const response = deserialize(Buffer.from(result.extraOutput, 'binary')) as any;
+    const response = deserialize(Buffer.from(result.extraOutput, 'base64')) as any;
     if (!response.success) {
       const memory = response.memoryLimitExceeded ? `Memory limit exceeded (${maxMemoryMB}MB): ` : '';
       throw new Error(memory + response.error);

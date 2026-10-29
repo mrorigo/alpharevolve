@@ -120,7 +120,8 @@ export function runProcess(command: string, args: string[], options: ProcessRunO
         timedOut,
         stdout: Buffer.concat(stdout).toString('utf8'),
         stderr: Buffer.concat(stderr).toString('utf8'),
-        extraOutput: Buffer.concat(extraOutput).toString('utf8'),
+        // Preserve arbitrary binary protocols sent over the optional fd 3 channel.
+        extraOutput: Buffer.concat(extraOutput).toString('base64'),
       });
     });
   });

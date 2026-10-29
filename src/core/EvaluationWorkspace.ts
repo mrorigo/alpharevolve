@@ -22,7 +22,8 @@ function excluded(name: string): boolean {
 }
 
 function relativeWithin(root: string, filename: string): string {
-  const relative = path.relative(root, path.resolve(filename));
+  const resolvedFilename = fs.realpathSync(path.resolve(filename));
+  const relative = path.relative(root, resolvedFilename);
   if (!relative || relative === '.' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
     throw new Error(`Evaluation file must be inside the project root: ${filename}`);
   }

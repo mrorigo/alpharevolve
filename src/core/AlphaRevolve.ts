@@ -149,6 +149,11 @@ export class AlphaRevolve {
       noiseToleranceMultiplier: this.config.noiseToleranceMultiplier!,
     });
 
+    if (this.options.saveResults && this.config.databaseOptions?.saveEnabled !== false) {
+      const snapshotPath = this.getDatabasePath();
+      this.evaluationDatabase.configureEventJournal(snapshotPath.replace(/\.json$/i, '.jsonl'));
+    }
+
     // Initialize database with metadata
     this.initializeDatabase();
     this.display = new ConsoleDisplay();

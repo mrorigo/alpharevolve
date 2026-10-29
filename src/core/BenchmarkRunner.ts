@@ -1,54 +1,55 @@
-import { spawn } from 'cross-spawn';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as process from 'process';
+import { EvaluationWorkspace } from './EvaluationWorkspace';
+import { runProcess } from './ProcessRunner';
+import { sandboxCommand } from './ExecutionSandbox';
 import { FitnessFunctionResult } from './types';
 import { Logger } from './logger';
 
 export interface BenchmarkOptions {
-    /** Path currently occupied by the code we want to optimize */
+    /** Candidate source file inside projectRoot */
     targetFilePath: string;
     /** Path to the test file that verifies the code */
     testFilePath: string;
-    /** Command to run tests (default: 'npx jest') */
+    /** Project root mirrored into an isolated workspace (defaults to cwd). */
+    projectRoot?: string;
+    /** Command to run tests (defaults to the current Node executable). */
     testCommand?: string;
     /** Optional extra arguments for the test command */
     testArgs?: string[];
     /** Relative weights for correctness and execution efficiency. */
     qualityWeight?: number;
     efficiencyWeight?: number;
+    /** Maximum time allowed for one test process. */
+    timeoutMs?: number;
+    /** Allow evaluation tests to access the network. Defaults to false. */
+    allowNetwork?: boolean;
+    /** Explicit opt-out for trusted test suites on unsupported systems. */
+    sandbox?: boolean;
 }
 
 export class BenchmarkRunner {
-    private options: BenchmarkOptions;
-    private originalContent: string | null = null;
+    private readonly options: BenchmarkOptions;
 
     constructor(options: BenchmarkOptions) {
-        this.options = options;
-        this.options.testCommand = options.testCommand || 'npx';
-        this.options.testArgs = options.testArgs || ['jest'];
-        this.options.qualityWeight = options.qualityWeight ?? 0.7;
-        this.options.efficiencyWeight = options.efficiencyWeight ?? 0.3;
+        this.options = {
+            ...options,
+            projectRoot: path.resolve(options.projectRoot || process.cwd()),
+            testCommand: options.testCommand || process.execPath,
+            qualityWeight: options.qualityWeight ?? 0.7,
+            efficiencyWeight: options.efficiencyWeight ?? 0.3,
+            timeoutMs: options.timeoutMs ?? 120_000,
+            allowNetwork: options.allowNetwork ?? false,
+            sandbox: options.sandbox ?? true,
+        };
+        if (this.options.testArgs) this.options.testArgs = [...this.options.testArgs];
         const weights = [this.options.qualityWeight, this.options.efficiencyWeight];
         if (weights.some(weight => !Number.isFinite(weight) || weight! < 0) || weights.every(weight => weight === 0)) {
             throw new Error('Score weights must be finite, non-negative, and at least one must be positive');
         }
-    }
-
-    /**
-     * Backups the original file content
-     */
-    private backupOriginal(): void {
-        if (fs.existsSync(this.options.targetFilePath)) {
-            this.originalContent = fs.readFileSync(this.options.targetFilePath, 'utf-8');
-        }
-    }
-
-    /**
-     * Restores the original file content
-     */
-    private restoreOriginal(): void {
-        if (this.originalContent !== null) {
-            fs.writeFileSync(this.options.targetFilePath, this.originalContent);
+        if (!Number.isFinite(this.options.timeoutMs) || this.options.timeoutMs! < 1) {
+            throw new Error('Test timeout must be a positive number of milliseconds');
         }
     }
 
@@ -56,23 +57,20 @@ export class BenchmarkRunner {
      * Evaluates a candidate solution by running the test suite
      */
     public async evaluate(solution: string): Promise<FitnessFunctionResult> {
-        // 1. Backup
-        if (this.originalContent === null) {
-            this.backupOriginal();
-        }
-
-        const metricsPath = path.join(process.cwd(), `metrics-${Date.now()}-${Math.random().toString(36).substr(2, 9)}.json`);
+        const workspace = new EvaluationWorkspace(
+            this.options.projectRoot!,
+            this.options.targetFilePath,
+            this.options.testFilePath
+        );
 
         try {
-            // 2. Write candidate solution
-            fs.writeFileSync(this.options.targetFilePath, solution);
+            workspace.writeCandidate(solution);
 
-            // 3. Run tests
             const startTime = Date.now();
-            const passed = await this.runTests(metricsPath);
+            const testResult = await this.runTests(workspace);
             const executionTime = Date.now() - startTime;
+            const passed = testResult.passed;
 
-            // 4. Collect & Aggregate Metrics
             let detailedMetrics = {
                 executionTime,
                 memoryUsage: { before: {} as any, after: {} as any, delta: {} as any },
@@ -80,9 +78,9 @@ export class BenchmarkRunner {
                 gcStats: { count: 0, totalTime: 0 }
             };
 
-            if (passed && fs.existsSync(metricsPath)) {
+            if (passed && fs.existsSync(workspace.metricsFilePath)) {
                 try {
-                    const metricsData = JSON.parse(fs.readFileSync(metricsPath, 'utf-8'));
+                    const metricsData = JSON.parse(fs.readFileSync(workspace.metricsFilePath, 'utf-8'));
                     // Aggregate metrics from all tests
                     let totalGcCount = 0;
                     let totalGcTime = 0;
@@ -111,11 +109,8 @@ export class BenchmarkRunner {
                     Logger.error('Failed to parse metrics file', e);
                 }
 
-                // Cleanup metrics file
-                try { fs.unlinkSync(metricsPath); } catch (e) { }
             }
 
-            // 5. Calculate scores
             const qualityScore = passed ? 1.0 : 0.0;
             // Enhanced efficiency score including GC penalties?
             // For now, keep simple time-based, but we *record* detailed metrics for the LLM.
@@ -128,7 +123,7 @@ export class BenchmarkRunner {
             ) / totalWeight;
 
             if (!passed) {
-                return { status: 'invalid', reason: 'The configured test suite failed' };
+                return { status: 'invalid', reason: testResult.reason };
             }
 
             return {
@@ -140,52 +135,57 @@ export class BenchmarkRunner {
 
         } catch (error) {
             Logger.error('Benchmark evaluation failed', error);
-            // Cleanup metrics file if exists
-            if (fs.existsSync(metricsPath)) { try { fs.unlinkSync(metricsPath); } catch (e) { } }
-
             throw new Error(`Benchmark evaluation failed: ${error instanceof Error ? error.message : String(error)}`);
         } finally {
-            // 6. Restore
-            this.restoreOriginal();
+            workspace.cleanup();
         }
     }
 
-    private runTests(metricsPath: string): Promise<boolean> {
-        return new Promise((resolve, reject) => {
-            // Locate our custom environment
-            // Jest needs a JS file for the environment, even if using ts-jest, 
-            // unless we jump through hoops. We rely on the build output.
-            const envPath = path.resolve(process.cwd(), 'dist/core/jest/AlphaEnvironment.js');
+    private async runTests(workspace: EvaluationWorkspace): Promise<{ passed: boolean; reason: string }> {
+        const envPath = path.join(workspace.root, 'dist/core/jest/AlphaEnvironment.js');
+        if (!fs.existsSync(envPath)) {
+            Logger.warn(`AlphaEnvironment not found in isolated workspace. Metrics will not be collected.`);
+        }
 
-            if (!fs.existsSync(envPath)) {
-                Logger.warn(`AlphaEnvironment not found at ${envPath}. Metrics will not be collected.`);
-            }
+        const defaultJest = path.join(workspace.root, 'node_modules/jest/bin/jest.js');
+        const args = [
+            ...(this.options.testArgs || [defaultJest]),
+            path.relative(workspace.root, workspace.testFilePath),
+            '--env', envPath,
+        ];
+        const env: NodeJS.ProcessEnv = {
+            PATH: process.env.PATH || '/usr/bin:/bin',
+            HOME: workspace.homePath,
+            USERPROFILE: workspace.homePath,
+            TMPDIR: workspace.tempPath,
+            TMP: workspace.tempPath,
+            TEMP: workspace.tempPath,
+            CI: 'true',
+            ALPHA_METRICS_PATH: workspace.metricsFilePath,
+        };
+        for (const name of ['LANG', 'LC_ALL', 'TZ', 'SYSTEMROOT', 'WINDIR']) {
+            if (process.env[name]) env[name] = process.env[name];
+        }
 
-            console.log(`Using Jest Environment: ${envPath}`);
-
-            const allArgs = [
-                ...(this.options.testArgs || []),
-                this.options.testFilePath,
-                '--env', envPath
-            ];
-
-            const child = spawn(this.options.testCommand!, allArgs, {
-                env: {
-                    ...process.env,
-                    CI: 'true',
-                    ALPHA_METRICS_PATH: metricsPath
-                },
-                stdio: 'inherit'
-            });
-
-            child.on('close', (code: number) => {
-                resolve(code === 0);
-            });
-
-            child.on('error', (err: Error) => {
-                Logger.error('Failed to start test process', err);
-                reject(err);
-            });
+        const wrapped = sandboxCommand(this.options.testCommand!, args, {
+            workspaceRoot: workspace.root,
+            projectRoot: this.options.projectRoot,
+            allowNetwork: this.options.allowNetwork,
+            enabled: this.options.sandbox,
         });
+        const result = await runProcess(wrapped.command, wrapped.args, {
+            cwd: workspace.root,
+            env,
+            timeoutMs: this.options.timeoutMs,
+            stdio: 'inherit',
+        });
+
+        if (result.timedOut) {
+            return { passed: false, reason: `Test suite timed out after ${this.options.timeoutMs}ms` };
+        }
+        if (result.exitCode !== 0) {
+            return { passed: false, reason: `Test suite exited with code ${String(result.exitCode)}` };
+        }
+        return { passed: true, reason: '' };
     }
 }

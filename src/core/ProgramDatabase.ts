@@ -23,7 +23,8 @@ export class ProgramDatabase {
   private programs: Map<string, CandidateSolution> = new Map();
   private metadata: Record<string, any> = {};
   private bestProgramId: string | null = null;
-  private readonly dbVersion: string = '1.1';
+  private readonly dbVersion: string = '1.2';
+  private eventJournalPath?: string;
   private higherIsBetter = true;
   private minImprovement = 0;
   private noiseToleranceMultiplier = 1;
@@ -39,6 +40,42 @@ export class ProgramDatabase {
     this.noiseToleranceMultiplier = options.noiseToleranceMultiplier;
     this.bestProgramId = null;
     for (const candidate of this.programs.values()) this.considerBest(candidate);
+    this.appendEvent({ type: 'selection_configured', options, bestProgramId: this.bestProgramId });
+  }
+
+  /** Start an append-only journal. Existing journals are never silently reused. */
+  configureEventJournal(filePath: string): void {
+    const absolutePath = path.resolve(filePath);
+    fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
+    if (fs.existsSync(absolutePath) && fs.statSync(absolutePath).size > 0) {
+      throw new Error(`Event journal already exists: ${absolutePath}`);
+    }
+    this.eventJournalPath = absolutePath;
+    this.appendEvent({ type: 'journal_started', version: this.dbVersion });
+    this.appendEvent({
+      type: 'selection_configured',
+      options: {
+        higherIsBetter: this.higherIsBetter,
+        minImprovement: this.minImprovement,
+        noiseToleranceMultiplier: this.noiseToleranceMultiplier,
+      },
+      bestProgramId: this.bestProgramId,
+    });
+    for (const [key, value] of Object.entries(this.metadata)) this.appendEvent({ type: 'metadata_set', key, value });
+    for (const candidate of this.programs.values()) {
+      this.appendEvent({ type: 'candidate_added', candidate, bestProgramId: this.bestProgramId });
+    }
+  }
+
+  private appendEvent(event: Record<string, any>): void {
+    if (!this.eventJournalPath) return;
+    const fd = fs.openSync(this.eventJournalPath, 'a', 0o600);
+    try {
+      fs.writeSync(fd, `${JSON.stringify({ ...event, at: new Date().toISOString() })}\n`, undefined, 'utf8');
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
   }
 
   private isValid(candidate: CandidateSolution): boolean {
@@ -114,6 +151,7 @@ export class ProgramDatabase {
     this.programs.set(id, candidate);
 
     this.considerBest(candidate);
+    this.appendEvent({ type: 'candidate_added', candidate, bestProgramId: this.bestProgramId });
 
     return candidate;
   }
@@ -276,6 +314,7 @@ export class ProgramDatabase {
    * @param value Metadata value
    */
   setMetadata(key: string, value: any): void {
+    this.appendEvent({ type: 'metadata_set', key, value });
     this.metadata[key] = value;
   }
 
@@ -331,8 +370,15 @@ export class ProgramDatabase {
        const json = JSON.stringify(data, null, 2);
        console.log(`Database prepared for saving: ${data.programs.length} programs, ${json.length} bytes`);
  
-       // Write the file
-       await fs.promises.writeFile(absolutePath, json, 'utf8');
+       // Replace the snapshot atomically so a crash cannot leave truncated JSON.
+       const temporaryPath = `${absolutePath}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
+       try {
+         const handle = await fs.promises.open(temporaryPath, 'wx', 0o600);
+         try { await handle.writeFile(json, 'utf8'); await handle.sync(); } finally { await handle.close(); }
+         await fs.promises.rename(temporaryPath, absolutePath);
+       } finally {
+         await fs.promises.rm(temporaryPath, { force: true });
+       }
        
        // Verify file was saved
        if (fs.existsSync(absolutePath)) {
@@ -393,5 +439,37 @@ export class ProgramDatabase {
       console.error(`Failed to load database from ${filePath}:`, error);
       throw new Error(`Database load failed: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+
+  /** Rebuild a database from its event journal, tolerating only a torn final line. */
+  static async loadFromJournal(filePath: string): Promise<ProgramDatabase> {
+    const text = await fs.promises.readFile(filePath, 'utf8');
+    const lines = text.split('\n');
+    if (lines[lines.length - 1] === '') lines.pop();
+    const db = new ProgramDatabase();
+    for (let index = 0; index < lines.length; index++) {
+      let event: any;
+      try { event = JSON.parse(lines[index]); }
+      catch (error) {
+        if (index === lines.length - 1) break;
+        throw new Error(`Invalid event journal line ${index + 1}: ${String(error)}`);
+      }
+      if (event.type === 'selection_configured') {
+        db.higherIsBetter = event.options.higherIsBetter;
+        db.minImprovement = event.options.minImprovement;
+        db.noiseToleranceMultiplier = event.options.noiseToleranceMultiplier;
+        db.bestProgramId = event.bestProgramId ?? null;
+      } else if (event.type === 'metadata_set') {
+        db.metadata[event.key] = event.value;
+      } else if (event.type === 'candidate_added') {
+        const candidate = event.candidate as CandidateSolution;
+        candidate.timestamp = new Date(candidate.timestamp);
+        db.programs.set(candidate.id, candidate);
+        db.bestProgramId = event.bestProgramId ?? null;
+      } else if (event.type !== 'journal_started') {
+        throw new Error(`Unknown event journal type on line ${index + 1}: ${String(event.type)}`);
+      }
+    }
+    return db;
   }
 }

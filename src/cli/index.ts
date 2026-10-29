@@ -46,6 +46,9 @@ program
     .option('--noise-tolerance-multiplier <number>', 'Multiplier applied to measured score noise', '1')
     .option('--quality-weight <number>', 'Correctness contribution to the CLI score', '0.7')
     .option('--efficiency-weight <number>', 'Execution efficiency contribution to the CLI score', '0.3')
+    .option('--evaluation-timeout <ms>', 'Maximum time for one test run', '120000')
+    .option('--allow-test-network', 'Allow evaluation code to access the network', false)
+    .option('--unsandboxed-tests', 'Run trusted test code without the OS sandbox', false)
     .option('--api-key <string>', 'API Key (or set OPENAI_API_KEY env var)')
     .option('--base-url <string>', 'API Base URL (or set OPENAI_BASE_URL env var)')
     .description('Optimize a specific file using a test suite for feedback')
@@ -87,6 +90,9 @@ program
                 testFilePath: absoluteTest,
                 qualityWeight: scoreWeights.quality,
                 efficiencyWeight: scoreWeights.efficiency,
+                timeoutMs: Number(options.evaluationTimeout),
+                allowNetwork: options.allowTestNetwork,
+                sandbox: !options.unsandboxedTests,
             });
             const fitnessFunction = (solution: string) => runner.evaluate(solution);
 

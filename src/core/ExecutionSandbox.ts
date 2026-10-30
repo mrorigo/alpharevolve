@@ -17,6 +17,15 @@ function quoteProfile(value: string): string {
   return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 }
 
+function addHomePathMetadataAncestors(paths: Set<string>, value: string, home: string): void {
+  let current = path.resolve(value);
+  while (current === home || current.startsWith(`${home}${path.sep}`)) {
+    paths.add(current);
+    if (current === home) break;
+    current = path.dirname(current);
+  }
+}
+
 function macProfile(options: SandboxOptions): string {
   const workspace = realPath(options.workspaceRoot);
   const project = options.projectRoot && fs.existsSync(options.projectRoot)
@@ -30,6 +39,10 @@ function macProfile(options: SandboxOptions): string {
   const resolvedNodeModules = fs.existsSync(nodeModules) ? realPath(nodeModules) : undefined;
   const readable = new Set([workspace, nodeRoot]);
   if (resolvedNodeModules) readable.add(resolvedNodeModules);
+  const homeMetadataPaths = new Set<string>();
+  for (const allowedPath of [nodePath, nodeRoot, resolvedNodeModules, project].filter(Boolean) as string[]) {
+    addHomePathMetadataAncestors(homeMetadataPaths, allowedPath, home);
+  }
 
   const rules = [
     '(version 1)',
@@ -38,6 +51,9 @@ function macProfile(options: SandboxOptions): string {
     `(allow file-write* (subpath ${quoteProfile(workspace)}))`,
     `(deny file-read* (subpath ${quoteProfile(home)}))`,
   ];
+  for (const directory of homeMetadataPaths) {
+    rules.push(`(allow file-read-metadata (literal ${quoteProfile(directory)}))`);
+  }
   if (resolvedNodeModules) rules.push(`(deny file-write* (subpath ${quoteProfile(resolvedNodeModules)}))`);
   if (project) rules.push(`(deny file-read* (subpath ${quoteProfile(project)}))`);
   for (const directory of readable) {

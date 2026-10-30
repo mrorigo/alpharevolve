@@ -65,6 +65,7 @@ interface ProbeOptions {
   workspace: string;
   projectRoot: string;
   runnerPath: string;
+  useNodeShebang?: boolean;
 }
 
 async function runProbe(options: ProbeOptions): Promise<void> {
@@ -77,8 +78,10 @@ async function runProbe(options: ProbeOptions): Promise<void> {
     throw new Error(`Probe ${options.mode} requires a loopback listener port`);
   }
   // Keep argv positions stable when probes do not need a file target.
-  const args = [options.runnerPath, options.mode, options.target || '', String(options.port ?? 0)];
-  const wrapped = sandboxCommand(process.execPath, args, {
+  const args = options.useNodeShebang
+    ? [options.mode, options.target || '', String(options.port ?? 0)]
+    : [options.runnerPath, options.mode, options.target || '', String(options.port ?? 0)];
+  const wrapped = sandboxCommand(options.useNodeShebang ? options.runnerPath : process.execPath, args, {
     workspaceRoot: options.workspace,
     projectRoot: options.projectRoot,
     allowNetwork: false,
@@ -132,6 +135,7 @@ async function main(): Promise<void> {
   const homeCanary = path.join(os.homedir(), `.alpharevolve-sandbox-canary-${randomUUID()}`);
   const workspaceCanary = path.join(workspace, 'workspace-canary.txt');
   const runnerPath = path.join(workspace, 'probe.cjs');
+  const shebangRunnerPath = path.join(workspace, 'probe-with-shebang');
   const listener = net.createServer(socket => {
     socket.on('error', () => undefined);
     socket.end('connected');
@@ -145,6 +149,7 @@ async function main(): Promise<void> {
       throw new Error(`Cannot create the temporary home canary at ${homeCanary}: ${String(error)}`);
     }
     fs.writeFileSync(runnerPath, probeSource, { mode: 0o600 });
+    fs.writeFileSync(shebangRunnerPath, `#!/usr/bin/env node\n${probeSource}`, { mode: 0o700 });
     const port = await listen(listener);
     const probe = (mode: string, target?: string, sandboxed = false) => runProbe({
       mode, target, port, sandboxed, workspace, projectRoot, runnerPath,
@@ -159,6 +164,10 @@ async function main(): Promise<void> {
 
     // Confirm intended access inside the workspace and denials outside it.
     await probe('workspace', workspaceCanary, true);
+    await runProbe({
+      mode: 'workspace', target: workspaceCanary, sandboxed: true, workspace, projectRoot,
+      runnerPath: shebangRunnerPath, useNodeShebang: true,
+    });
     await probe('read-denied', projectCanary, true);
     await probe('write-denied', projectCanary, true);
     await probe('read-denied', homeCanary, true);

@@ -1,5 +1,6 @@
 import {
   CandidateSolution,
+  CandidateEvaluator,
   EvaluationResult,
   EvolutionConfig,
   EvolutionOptions,
@@ -68,6 +69,7 @@ function normalizeEvaluation(result: any): EvaluationResult {
  */
 export class AlphaRevolve {
   private readonly config: EvolutionConfig;
+  private readonly evaluator: CandidateEvaluator;
   private readonly llmService: LlmService;
   private readonly feedbackService: FeedbackService;
   private readonly evaluationDatabase: ProgramDatabase;
@@ -106,6 +108,11 @@ export class AlphaRevolve {
     llmService?: LlmService,
     feedbackService?: FeedbackService
   ) {
+    if (Boolean(config.evaluator) === Boolean(config.fitnessFunction)) {
+      throw new Error('Configure exactly one of evaluator or fitnessFunction');
+    }
+    this.evaluator = config.evaluator || { evaluate: config.fitnessFunction! };
+
     this.config = {
       ...config,
       temperature: config.temperature ?? 0.7,
@@ -186,7 +193,7 @@ export class AlphaRevolve {
   }> {
     const runs: EvaluationResult[] = [];
     for (let index = 0; index < this.config.evaluationRepeats!; index++) {
-      runs.push(normalizeEvaluation(await this.config.fitnessFunction(solution)));
+      runs.push(normalizeEvaluation(await this.evaluator.evaluate(solution)));
     }
 
     const validRuns = runs.filter(
@@ -197,6 +204,9 @@ export class AlphaRevolve {
     const finalScoreMad = values.length
       ? median(values.map(value => Math.abs(value - centre)))
       : 0;
+    const benchmarkScoreMads = validRuns
+      .map(run => run.fitness.performanceMetrics?.benchmark?.finalScoreMad ?? 0);
+    const measuredFinalScoreMad = benchmarkScoreMads.length ? median(benchmarkScoreMads) : 0;
     const invalidRun = runs.find((run): run is { status: 'invalid'; reason: string } => run.status === 'invalid');
     const fitness = validRuns.length
       ? aggregateValues(validRuns.map(run => run.fitness)) as FitnessScores
@@ -208,7 +218,7 @@ export class AlphaRevolve {
         status: invalidRun ? 'invalid' : 'valid',
         reason: invalidRun?.reason,
         runs,
-        finalScoreMad,
+        finalScoreMad: Math.max(finalScoreMad, measuredFinalScoreMad),
       },
     };
   }

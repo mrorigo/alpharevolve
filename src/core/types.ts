@@ -33,12 +33,17 @@ export type EvaluationResult =
 
 export type FitnessFunctionResult = FitnessScores | EvaluationResult;
 
+/** A candidate evaluator can be injected as an object or as the legacy function callback. */
+export interface CandidateEvaluator {
+  evaluate(solution: string): Promise<FitnessFunctionResult>;
+}
+
 /** Persisted evaluation status and the raw scores used to form the median. */
 export interface CandidateEvaluation {
   status: 'valid' | 'invalid';
   reason?: string;
   runs: EvaluationResult[];
-  /** Median absolute deviation of finalScore across valid runs. */
+  /** Robust finalScore spread across repeated evaluations and benchmark samples. */
   finalScoreMad: number;
 }
 
@@ -112,7 +117,7 @@ export interface EvolutionOptions {
 /**
  * Configuration settings for an evolutionary optimization run.
  */
-export interface EvolutionConfig {
+interface EvolutionConfigBase {
   /** The initial candidate solution to optimize (e.g., code, function, parameter set) */
   initialSolution: string;
 
@@ -128,13 +133,6 @@ export interface EvolutionConfig {
    * If not set, a default feedback reviewer prompt will be used.
    */
   feedbackSystemPrompt?: string;
-
-  /**
-   * A fitness function that evaluates a candidate solution. It may return
-   * finite scores directly (legacy form), an explicit valid result, or an
-   * invalid result with a reason. Throw only when the evaluator itself failed.
-   */
-  fitnessFunction: (solution: string) => Promise<FitnessFunctionResult>;
 
   /** A human-readable description of the problem */
   problemDescription: string;
@@ -187,6 +185,12 @@ export interface EvolutionConfig {
   /** Options for persisting the evaluation database */
   databaseOptions?: DatabaseOptions;
 }
+
+/** Configure either the legacy callback or an object-based evaluator. */
+export type EvolutionConfig = EvolutionConfigBase & (
+  | { fitnessFunction: (solution: string) => Promise<FitnessFunctionResult>; evaluator?: never }
+  | { evaluator: CandidateEvaluator; fitnessFunction?: never }
+);
 
 /**
  * The result returned by running the evolution process

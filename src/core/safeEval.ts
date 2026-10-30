@@ -8,6 +8,14 @@ import { sandboxCommand } from './ExecutionSandbox';
 
 export interface PerformanceMetrics {
   executionTime: number;
+  correctnessCheckTimeMs?: number;
+  benchmark?: {
+    samplesMs: number[];
+    medianMs: number;
+    madMs: number;
+    warmupRuns: number;
+    finalScoreMad?: number;
+  };
   memoryUsage: { before: NodeJS.MemoryUsage; after: NodeJS.MemoryUsage; delta: NodeJS.MemoryUsage };
   cpuUsage: { user: number; system: number };
   gcStats?: { count: number; totalTime: number };

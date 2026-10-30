@@ -67,21 +67,35 @@ Use markdown formatting.
       const userCPUms = (metrics.cpuUsage?.user / 1000).toFixed(2);
       const systemCPUms = (metrics.cpuUsage?.system / 1000).toFixed(2);
       const gcTime = metrics.gcStats?.totalTime?.toFixed(2) || 'N/A';
-      const executionTimeMs = metrics.executionTime?.toFixed(2) || 'N/A';
+      const timingDetails = metrics.benchmark
+        ? `- Candidate benchmark median: ${metrics.benchmark.medianMs.toFixed(2)} ms\n` +
+          `- Benchmark MAD: ${metrics.benchmark.madMs.toFixed(2)} ms\n` +
+          `- Benchmark score MAD: ${(metrics.benchmark.finalScoreMad ?? 0).toFixed(6)}\n` +
+          `- Benchmark samples: ${metrics.benchmark.samplesMs.map(sample => sample.toFixed(2)).join(', ')} ms\n` +
+          `- Warmup runs: ${metrics.benchmark.warmupRuns}\n` +
+          `- Correctness suite duration: ${metrics.correctnessCheckTimeMs?.toFixed(2) || 'N/A'} ms`
+        : metrics.correctnessCheckTimeMs !== undefined
+          ? `- Correctness suite duration: ${metrics.correctnessCheckTimeMs.toFixed(2)} ms\n` +
+            `- No dedicated performance benchmark was configured.`
+          : `- Execution Time: ${metrics.executionTime?.toFixed(2) || 'N/A'} ms`;
+
+      const processMetricLabel = metrics.correctnessCheckTimeMs !== undefined
+        ? 'Correctness suite process metrics'
+        : 'Evaluated code process metrics';
 
       return `
-## Detailed Performance Metrics:
-- Execution Time: ${executionTimeMs} ms
-- Memory Usage:
+## Evaluation Metrics:
+${timingDetails}
+- ${processMetricLabel}:
   - Heap Used: ${heapUsedMB} MB Δ
   - Heap Total: ${heapTotalMB} MB Δ
   - RSS: ${rssMB} MB Δ
-- CPU Usage:
-  - User CPU time: ${userCPUms} ms
-  - System CPU time: ${systemCPUms} ms
-- Garbage Collection:
-  - Count: ${metrics.gcStats?.count || 'N/A'}
-  - Total Time: ${gcTime} ms
+  - CPU Usage:
+    - User CPU time: ${userCPUms} ms
+    - System CPU time: ${systemCPUms} ms
+  - Garbage collection:
+    - Count: ${metrics.gcStats?.count || 'N/A'}
+    - Total Time: ${gcTime} ms
 `;
     } catch (error) {
       console.error('Error formatting performance metrics:', error);

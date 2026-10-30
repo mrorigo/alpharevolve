@@ -90,6 +90,8 @@ make example1
 # OR manual command (for custom models/Ollama)
 npx ts-node src/cli/index.ts optimize examples/sort_target.ts \
   --test examples/sort_benchmark.test.ts \
+  --benchmark-command ./node_modules/.bin/ts-node \
+  --benchmark-arg '{workspace}/examples/sort_benchmark_command.ts' \
   --iterations 5 \
   --model gemma3:4b \
   --base-url http://localhost:11434/v1 \
@@ -101,6 +103,30 @@ Demonstrates how to use AlphaRevolve as a library in your own scripts.
 ```bash
 npm run example2
 ```
+
+### Measure performance separately
+
+The `--test` suite decides whether a candidate is correct. It does not contribute its process startup time to the efficiency score.
+
+Add `--benchmark-command` to measure candidate performance. The command runs once after the correctness suite passes. It receives `ALPHA_BENCHMARK_WARMUP_RUNS` and `ALPHA_BENCHMARK_SAMPLE_RUNS` in its environment. It must perform those warmups and samples, then print one JSON object to stdout:
+
+```json
+{"warmupRuns":1,"samplesMs":[4.8,4.6,4.7,4.9,4.6]}
+```
+
+AlphaRevolve uses the median sample for the efficiency score, calculated as `1000 / (1000 + medianMs)`. It stores the samples and median absolute deviation in the run history. The default is one warmup and five measured samples. Without a benchmark command, the CLI scores candidates on correctness only. Passing candidates then tie, so AlphaRevolve cannot rank them by speed.
+
+The sorting example includes a benchmark command that follows this protocol:
+
+```bash
+npm run cli -- optimize examples/sort_target.ts \
+  --test examples/sort_benchmark.test.ts \
+  --benchmark-command ./node_modules/.bin/ts-node \
+  --benchmark-arg '{workspace}/examples/sort_benchmark_command.ts' \
+  --iterations 5
+```
+
+Benchmark arguments can use `{workspace}`, `{target}`, and `{test}`. AlphaRevolve replaces these placeholders with paths inside the disposable evaluation workspace. Keep benchmark output on stdout limited to the JSON result. Send diagnostic logs to stderr.
 
 ---
 

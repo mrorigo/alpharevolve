@@ -39,6 +39,8 @@ export class EvaluationWorkspace {
   readonly targetFilePath: string;
   readonly testFilePath: string;
   readonly metricsFilePath: string;
+  readonly metricsDirectoryPath: string;
+  readonly metricsPreloadPath: string;
   readonly homePath: string;
   readonly tempPath: string;
   readonly targetFilePaths: string[];
@@ -85,11 +87,14 @@ export class EvaluationWorkspace {
       this.targetFilePath = this.targetFilePaths[0];
       this.testFilePath = testRelative ? path.join(this.root, testRelative) : this.targetFilePath;
       this.metricsFilePath = path.join(this.root, '.alpha-metrics.json');
+      this.metricsDirectoryPath = path.join(this.root, '.alpha-process-metrics');
+      this.metricsPreloadPath = path.join(this.root, '.alpha-metrics-preload.cjs');
       this.homePath = path.join(this.root, '.evaluation-home');
       this.tempPath = path.join(this.root, '.evaluation-tmp');
       for (const targetPath of this.targetFilePaths) fs.mkdirSync(path.dirname(targetPath), { recursive: true });
       fs.mkdirSync(this.homePath);
       fs.mkdirSync(this.tempPath);
+      fs.mkdirSync(this.metricsDirectoryPath);
     } catch (error) {
       this.cleanup();
       throw error;

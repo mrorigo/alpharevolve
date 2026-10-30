@@ -20,6 +20,7 @@ export interface TaskManifest {
   noiseToleranceMultiplier: number;
   scoreWeights: { quality: number; efficiency: number };
   allowNetwork: boolean;
+  sandbox: boolean;
 }
 
 export interface LoadedTaskManifest {
@@ -146,6 +147,9 @@ export function loadTaskManifest(manifestPath: string): LoadedTaskManifest {
   if (parsed.allowNetwork !== undefined && typeof parsed.allowNetwork !== 'boolean') {
     throw new Error('allowNetwork must be a boolean');
   }
+  if (parsed.sandbox !== undefined && typeof parsed.sandbox !== 'boolean') {
+    throw new Error('sandbox must be a boolean');
+  }
 
   const config: TaskManifest = {
     version: 1,
@@ -160,6 +164,7 @@ export function loadTaskManifest(manifestPath: string): LoadedTaskManifest {
     noiseToleranceMultiplier: nonNegativeNumber(parsed.noiseToleranceMultiplier, 'noiseToleranceMultiplier', 1),
     scoreWeights,
     allowNetwork: parsed.allowNetwork ?? false,
+    sandbox: parsed.sandbox ?? true,
   };
   const initialFiles = Object.fromEntries(
     files.map(file => [file, fs.readFileSync(path.join(projectRoot, ...file.split('/')), 'utf8')])

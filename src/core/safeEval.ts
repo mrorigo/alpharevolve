@@ -19,6 +19,7 @@ export interface PerformanceMetrics {
   memoryUsage: { before: NodeJS.MemoryUsage; after: NodeJS.MemoryUsage; delta: NodeJS.MemoryUsage };
   cpuUsage: { user: number; system: number };
   gcStats?: { count: number; totalTime: number };
+  resourceMetrics?: { available: boolean; processCount: number; source: 'node-preload' };
   stats?: { functionCalls?: number; iterations?: number; memoryLimitExceeded?: boolean };
 }
 

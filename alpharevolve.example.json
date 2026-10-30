@@ -21,5 +21,6 @@
     "quality": 0.7,
     "efficiency": 0.3
   },
-  "allowNetwork": false
+  "allowNetwork": false,
+  "sandbox": true
 }

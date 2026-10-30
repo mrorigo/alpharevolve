@@ -37,7 +37,7 @@ function checkCommand(spec: TaskCommand, name: string, projectRoot: string): Pre
 }
 
 /** Check manifest commands and the selected sandbox backend without running user commands. */
-export function inspectTask(loaded: LoadedTaskManifest, unsandboxed = false): PreflightCheck[] {
+export function inspectTask(loaded: LoadedTaskManifest): PreflightCheck[] {
   const checks = [
     { name: 'Manifest', passed: true, detail: `Valid version 1 manifest: ${loaded.manifestPath}` },
     {
@@ -49,13 +49,13 @@ export function inspectTask(loaded: LoadedTaskManifest, unsandboxed = false): Pr
     checkCommand(loaded.config.benchmark, 'Benchmark command', loaded.projectRoot),
   ];
 
-  if (unsandboxed) {
-    checks.push({ name: 'Sandbox', passed: true, detail: 'Disabled by explicit --unsandboxed option' });
+  if (!loaded.config.sandbox) {
+    checks.push({ name: 'Sandbox', passed: true, detail: 'Disabled by manifest configuration' });
   } else if (process.platform !== 'darwin') {
     checks.push({
       name: 'Sandbox',
       passed: false,
-      detail: `No sandbox backend is available on ${process.platform}; use --unsandboxed only for trusted commands`,
+      detail: `No sandbox backend is available on ${process.platform}; set sandbox to false only for trusted commands`,
     });
   } else {
     const sandboxExecutable = executablePath('sandbox-exec', loaded.projectRoot);
@@ -67,7 +67,7 @@ export function inspectTask(loaded: LoadedTaskManifest, unsandboxed = false): Pr
           workspaceRoot: os.tmpdir(),
           projectRoot: loaded.projectRoot,
           allowNetwork: loaded.config.allowNetwork,
-          enabled: true,
+          enabled: loaded.config.sandbox,
         });
         checks.push({ name: 'Sandbox', passed: true, detail: `macOS sandbox backend available: ${sandboxExecutable}` });
       } catch (error) {

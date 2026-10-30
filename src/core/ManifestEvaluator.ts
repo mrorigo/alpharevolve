@@ -1,9 +1,12 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import { EvaluationWorkspace } from './EvaluationWorkspace';
 import { sandboxCommand } from './ExecutionSandbox';
 import { runProcess } from './ProcessRunner';
 import { CandidateSnapshot, CandidateSnapshotEvaluator, FitnessFunctionResult } from './types';
 import { PerformanceMetrics } from './safeEval';
 import { LoadedTaskManifest, TaskCommand } from './TaskManifest';
+import { NODE_METRICS_PRELOAD } from './MetricsPreload';
 
 function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b);
@@ -20,11 +23,52 @@ interface CommandResult {
   stderr: string;
 }
 
+interface NodeResourceMetric {
+  executionTime: number;
+  memoryUsage: PerformanceMetrics['memoryUsage'];
+  cpuUsage: PerformanceMetrics['cpuUsage'];
+  gcStats: NonNullable<PerformanceMetrics['gcStats']>;
+}
+
+function readNodeResourceMetrics(workspace: EvaluationWorkspace): Pick<PerformanceMetrics,
+  'memoryUsage' | 'cpuUsage' | 'gcStats' | 'resourceMetrics'> {
+  const metrics: NodeResourceMetric[] = [];
+  for (const filename of fs.readdirSync(workspace.metricsDirectoryPath)) {
+    if (!filename.endsWith('.json')) continue;
+    try {
+      metrics.push(JSON.parse(fs.readFileSync(path.join(workspace.metricsDirectoryPath, filename), 'utf8')));
+    } catch {
+      // A process can be killed before its exit hook writes a complete record.
+    }
+  }
+
+  const peakProcess = metrics.sort((a, b) => b.memoryUsage.after.heapUsed - a.memoryUsage.after.heapUsed)[0];
+  const zeroMemory = { rss: 0, heapTotal: 0, heapUsed: 0, external: 0, arrayBuffers: 0 };
+  return {
+    memoryUsage: peakProcess
+      ? peakProcess.memoryUsage
+      : { before: { ...zeroMemory }, after: { ...zeroMemory }, delta: { ...zeroMemory } },
+    cpuUsage: metrics.reduce((total, item) => ({
+      user: total.user + item.cpuUsage.user,
+      system: total.system + item.cpuUsage.system,
+    }), { user: 0, system: 0 }),
+    gcStats: metrics.reduce((total, item) => ({
+      count: total.count + item.gcStats.count,
+      totalTime: total.totalTime + item.gcStats.totalTime,
+    }), { count: 0, totalTime: 0 }),
+    resourceMetrics: {
+      available: metrics.length > 0,
+      processCount: metrics.length,
+      source: 'node-preload',
+    },
+  };
+}
+
 /** Executes allowlisted file snapshots using manifest commands and the OS sandbox. */
 export class ManifestEvaluator implements CandidateSnapshotEvaluator {
   readonly candidateType = 'snapshot' as const;
 
-  constructor(private readonly loaded: LoadedTaskManifest, private readonly sandbox = true) {}
+  constructor(private readonly loaded: LoadedTaskManifest) {}
 
   async evaluate(candidate: CandidateSnapshot): Promise<FitnessFunctionResult> {
     const { config, projectRoot } = this.loaded;
@@ -36,9 +80,10 @@ export class ManifestEvaluator implements CandidateSnapshotEvaluator {
     try {
       correctnessWorkspace.writeCandidates(candidate.files);
       const correctnessStarted = Date.now();
-      const correctness = await this.runCommand(correctnessWorkspace, config.correctness, 4 * 1024 * 1024);
+      const correctness = await this.runCommand(correctnessWorkspace, config.correctness, 4 * 1024 * 1024, {}, true);
       const correctnessCheckTimeMs = Date.now() - correctnessStarted;
       if (!correctness.passed) return { status: 'invalid', reason: correctness.reason };
+      const resourceMetrics = readNodeResourceMetrics(correctnessWorkspace);
 
       const benchmarkWorkspace = new EvaluationWorkspace(projectRoot, config.files);
       let benchmark: NonNullable<PerformanceMetrics['benchmark']>;
@@ -66,9 +111,7 @@ export class ManifestEvaluator implements CandidateSnapshotEvaluator {
         executionTime: correctnessCheckTimeMs,
         correctnessCheckTimeMs,
         benchmark,
-        memoryUsage: { before: {} as any, after: {} as any, delta: {} as any },
-        cpuUsage: { user: 0, system: 0 },
-        gcStats: { count: 0, totalTime: 0 },
+        ...resourceMetrics,
       };
       return { qualityScore, efficiencyScore, finalScore, performanceMetrics: metrics };
     } finally {
@@ -110,7 +153,8 @@ export class ManifestEvaluator implements CandidateSnapshotEvaluator {
     workspace: EvaluationWorkspace,
     spec: TaskCommand,
     maxOutputBytes: number,
-    extraEnv: NodeJS.ProcessEnv = {}
+    extraEnv: NodeJS.ProcessEnv = {},
+    collectNodeMetrics = false
   ): Promise<CommandResult> {
     const primary = workspace.targetFilePath;
     const replaceTokens = (value: string) => value
@@ -127,6 +171,11 @@ export class ManifestEvaluator implements CandidateSnapshotEvaluator {
       CI: 'true',
       ...extraEnv,
     };
+    if (collectNodeMetrics) {
+      fs.writeFileSync(workspace.metricsPreloadPath, NODE_METRICS_PRELOAD, 'utf8');
+      env.ALPHA_METRICS_DIRECTORY = workspace.metricsDirectoryPath;
+      env.NODE_OPTIONS = `--require=${JSON.stringify(workspace.metricsPreloadPath)}`;
+    }
     for (const name of ['LANG', 'LC_ALL', 'TZ', 'SYSTEMROOT', 'WINDIR']) {
       if (process.env[name]) env[name] = process.env[name];
     }
@@ -135,7 +184,7 @@ export class ManifestEvaluator implements CandidateSnapshotEvaluator {
       workspaceRoot: workspace.root,
       projectRoot: this.loaded.projectRoot,
       allowNetwork: this.loaded.config.allowNetwork,
-      enabled: this.sandbox,
+      enabled: this.loaded.config.sandbox,
     });
     const result = await runProcess(wrapped.command, wrapped.args, {
       cwd: workspace.root,

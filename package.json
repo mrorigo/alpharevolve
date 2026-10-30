@@ -7,7 +7,7 @@
   },
   "scripts": {
     "test": "jest",
-    "example1": "npx ts-node src/cli/index.ts optimize examples/sort_target.ts --test examples/sort_benchmark.test.ts --benchmark-command ./node_modules/.bin/ts-node --benchmark-arg '{workspace}/examples/sort_benchmark_command.ts'",
+    "example1": "npx ts-node src/cli/index.ts optimize --config alpharevolve.example.json",
     "example2": "ts-node examples/example2.ts",
     "recovery-demo": "ts-node examples/recovery_demo.ts",
     "sandbox-acceptance": "ts-node examples/sandbox_acceptance.ts",

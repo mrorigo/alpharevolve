@@ -49,7 +49,7 @@ npm run build
 
 ### Usage
 
-AlphaRevolve can now be used directly via the CLI to optimize any TypeScript/JavaScript file in your project, using your existing test suites for feedback.
+The CLI uses a task manifest for every optimization. The manifest declares the goal, editable files, correctness command, and benchmark command.
 
 #### 1. Set Your API Credentials
 
@@ -60,16 +60,18 @@ export OPENAI_BASE_URL=https://api.openai.com/v1 # Optional, defaults to OpenAI
 
 #### 2. Run the Optimizer
 
-To optimize a file `src/my-algorithm.ts` using `src/my-algorithm.test.ts` for verification:
+Start from the included example or create `alpharevolve.json` in your project root:
 
 ```bash
-npm run cli -- optimize src/my-algorithm.ts --test src/my-algorithm.test.ts --iterations 10 --model gpt-4
+cp alpharevolve.example.json alpharevolve.json
+npm run cli -- check --config alpharevolve.json
+npm run cli -- optimize --config alpharevolve.json --model gpt-4
 ```
 
 or if you have linked the package:
 
 ```bash
-alpharevolve optimize src/my-algorithm.ts --test src/my-algorithm.test.ts
+alpharevolve optimize --config alpharevolve.json
 ```
 
 ### Running Examples
@@ -87,12 +89,8 @@ npm run example1
 # OR via Makefile
 make example1
 
-# OR manual command (for custom models/Ollama)
-npx ts-node src/cli/index.ts optimize examples/sort_target.ts \
-  --test examples/sort_benchmark.test.ts \
-  --benchmark-command ./node_modules/.bin/ts-node \
-  --benchmark-arg '{workspace}/examples/sort_benchmark_command.ts' \
-  --iterations 5 \
+# OR with a custom model/Ollama
+npm run cli -- optimize --config alpharevolve.example.json \
   --model gemma3:4b \
   --base-url http://localhost:11434/v1 \
   --api-key ollama
@@ -103,18 +101,6 @@ Demonstrates how to use AlphaRevolve as a library in your own scripts.
 ```bash
 npm run example2
 ```
-
-### Measure performance separately
-
-The `--test` suite decides whether a candidate is correct. It does not contribute its process startup time to the efficiency score.
-
-Add `--benchmark-command` to measure candidate performance. The command runs once after the correctness suite passes. It receives `ALPHA_BENCHMARK_WARMUP_RUNS` and `ALPHA_BENCHMARK_SAMPLE_RUNS` in its environment. It must perform those warmups and samples, then print one JSON object to stdout:
-
-```json
-{"warmupRuns":1,"samplesMs":[4.8,4.6,4.7,4.9,4.6]}
-```
-
-AlphaRevolve uses the median sample for the efficiency score, calculated as `1000 / (1000 + medianMs)`. It stores the samples and median absolute deviation in the run history. The default is one warmup and five measured samples. Without a benchmark command, the CLI scores candidates on correctness only. Passing candidates then tie, so AlphaRevolve cannot rank them by speed.
 
 ## Manifest-backed optimization
 
@@ -131,9 +117,9 @@ Check setup first with:
 npm run cli -- check --config alpharevolve.json
 ```
 
-Preflight validates the manifest and source paths, checks that both command executables resolve, and reports the sandbox backend and run settings, including command arguments (sensitive flag values are redacted). It does not launch the correctness or benchmark commands and does not call an LLM. On non-macOS platforms, use `--unsandboxed` only when the configured evaluation commands are trusted; this reports that sandboxing is disabled.
+Preflight validates the manifest and source paths, checks that both command executables resolve, and reports the sandbox backend and run settings, including command arguments (sensitive flag values are redacted). It does not launch the correctness or benchmark commands and does not call an LLM. `sandbox` defaults to `true`; set it to `false` only for trusted evaluation commands on platforms without a sandbox backend.
 
-The manifest lives at the project root, and file paths are relative to the directory containing the manifest. `files` is the complete allowlist of TypeScript and JavaScript files the model may change. Correctness runs first in a disposable workspace. Only a passing candidate is benchmarked, in a separate fresh workspace. Each command is launched directly with its `args` array, without shell expansion. Use `{workspace}` or `{primary}` in arguments when a workspace path is needed. Evaluation is sandboxed on macOS and denies network access by default; `allowNetwork: true` opts into network access.
+The manifest lives at the project root, and file paths are relative to the directory containing the manifest. `files` is the complete allowlist of TypeScript and JavaScript files the model may change. Correctness runs first in a disposable workspace. Only a passing candidate is benchmarked, in a separate fresh workspace. Each command is launched directly with its `args` array, without shell expansion. Use `{workspace}` or `{primary}` in arguments when a workspace path is needed. Evaluation is sandboxed on macOS and denies network access by default; `allowNetwork: true` opts into network access. `sandbox: false` disables both filesystem and network restrictions and should only be used for trusted commands.
 
 ```json
 {
@@ -153,11 +139,12 @@ The manifest lives at the project root, and file paths are relative to the direc
   "minImprovement": 0,
   "noiseToleranceMultiplier": 1,
   "scoreWeights": { "quality": 0.7, "efficiency": 0.3 },
-  "allowNetwork": false
+  "allowNetwork": false,
+  "sandbox": true
 }
 ```
 
-`correctness` and `benchmark` each require a `command` and may include an `args` array. `warmupRuns` defaults to 1, `sampleRuns` to 5, and the other run settings shown above are optional. Benchmark commands receive `ALPHA_BENCHMARK_WARMUP_RUNS` and `ALPHA_BENCHMARK_SAMPLE_RUNS`; print one JSON object to stdout with the configured `warmupRuns` and exactly `sampleRuns` finite, non-negative `samplesMs` values. AlphaRevolve scores correctness as 1 for a passing candidate, combines it with benchmark efficiency using the configured weights, and uses sample median and median absolute deviation for ranking. It writes the candidate snapshots and metrics to `runs/<runId>.json` and `runs/<runId>.jsonl`, plus a patch and report at `runs/<runId>.patch` and `runs/<runId>.report.md`. Review the patch and report, then apply it yourself with the commands shown in the report. The existing single-file CLI remains available.
+`correctness` and `benchmark` each require a `command` and may include an `args` array. `warmupRuns` defaults to 1, `sampleRuns` to 5, and the other run settings shown above are optional. Benchmark commands receive `ALPHA_BENCHMARK_WARMUP_RUNS` and `ALPHA_BENCHMARK_SAMPLE_RUNS`; print one JSON object to stdout with the configured `warmupRuns` and exactly `sampleRuns` finite, non-negative `samplesMs` values. AlphaRevolve scores correctness as 1 for a passing candidate, combines it with benchmark efficiency using the configured weights, and uses sample median and median absolute deviation for ranking. During correctness evaluation, Node processes collect CPU, heap memory, and GC measurements through a preload hook. CPU and GC totals are summed across instrumented Node processes; memory reports the peak single-process heap. If no instrumented Node process is detected, resource metrics are marked unavailable. The preload is not applied to benchmark commands, so it does not affect benchmark timings. AlphaRevolve writes candidate snapshots and metrics to `runs/<runId>.json` and `runs/<runId>.jsonl`, plus a patch and report at `runs/<runId>.patch` and `runs/<runId>.report.md`. Review the patch and report, then apply it yourself with the commands shown in the report.
 
 The repository includes [alpharevolve.example.json](alpharevolve.example.json) as a runnable task definition for the sorting example.
 
@@ -168,22 +155,20 @@ To inspect a manifest-backed run in the HTML explorer, select its `runs/<runId>.
 Pass the saved run database and the same manifest to continue from its best valid candidate:
 
 ```sh
-npm run cli -- optimize --config alpharevolve.json --resume runs/run-2026-10-30_12-00-00-1234abcd.json --iterations 5
+npm run cli -- optimize --config alpharevolve.json \
+  --resume runs/run-2026-10-30_12-00-00-1234abcd.json \
+  --additional-iterations 5
 ```
 
-`--iterations` is the number of additional candidate iterations; if omitted, it uses the manifest's `iterations` value. The manifest must match the fingerprint saved when the run started. AlphaRevolve resumes the existing run ID, database, and event journal. If a journal exists, it is used to recover candidates recorded after the last JSON snapshot, and an incomplete final journal line is discarded. Runs created before manifest fingerprints were recorded cannot be resumed safely. The winner patch and report are refreshed under the same run ID.
+`--additional-iterations` is the number of extra candidate iterations; if omitted, it uses the manifest's `iterations` value. The manifest must match the fingerprint saved when the run started. AlphaRevolve resumes the existing run ID, database, and event journal. If a journal exists, it is used to recover candidates recorded after the last JSON snapshot, and an incomplete final journal line is discarded. Runs created before manifest fingerprints were recorded cannot be resumed safely. The winner patch and report are refreshed under the same run ID.
 
-The sorting example includes a benchmark command that follows this protocol:
+The sorting example's benchmark command follows this protocol:
 
 ```bash
-npm run cli -- optimize examples/sort_target.ts \
-  --test examples/sort_benchmark.test.ts \
-  --benchmark-command ./node_modules/.bin/ts-node \
-  --benchmark-arg '{workspace}/examples/sort_benchmark_command.ts' \
-  --iterations 5
+npm run cli -- optimize --config alpharevolve.example.json
 ```
 
-Benchmark arguments can use `{workspace}`, `{target}`, and `{test}`. AlphaRevolve replaces these placeholders with paths inside the disposable evaluation workspace. Keep benchmark output on stdout limited to the JSON result. Send diagnostic logs to stderr.
+Manifest command arguments can use `{workspace}` and `{primary}`. AlphaRevolve replaces these placeholders with paths inside the disposable evaluation workspace. Keep benchmark output on stdout limited to the JSON result. Send diagnostic logs to stderr.
 
 ---
 
@@ -216,12 +201,12 @@ alpharevolve/
 
 AlphaRevolve collects detailed metrics during evolution:
 
-- **Execution Performance:** Execution time and memory allocation (Heap, RSS).
+- **Execution Performance:** Execution time, CPU, and memory allocation (Heap, RSS).
 - **Garbage Collection:** Count and duration of GC events (via `perf_hooks`).
 - **Quality Metrics:** Correctness and efficiency scores based on your test suite.
 - **Evolution History:** Complete generation tracking with parent-child relationships.
 
-*Note: Advanced metrics like CPU usage and loop iteration counts are available when using the programmatic `safeEval` API, but the CLI focus is on integration with standard Jest environments.*
+Manifest evaluations collect CPU, heap, and GC measurements from Node processes launched by the correctness command. If the command spawns no Node process, resource metrics are marked unavailable. Benchmark commands are not instrumented, so their timing samples remain unaffected.
 
 ## 🔄 Robust Error Handling
 

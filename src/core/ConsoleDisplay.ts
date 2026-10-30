@@ -15,13 +15,18 @@ export class ConsoleDisplay {
    * @returns A formatted comparison string.
    */
   createParentComparison(parentMetrics: any, childMetrics: any): string {
+    return this.formatParentComparison(parentMetrics, childMetrics, true);
+  }
+
+  private formatParentComparison(parentMetrics: any, childMetrics: any, colorized: boolean): string {
     const finalScoreDiff = childMetrics.finalScore - parentMetrics.finalScore;
     const percentChange = (finalScoreDiff / (Math.abs(parentMetrics.finalScore) || 0.0001)) * 100;
+    const label = (value: string) => colorized ? chalk.yellow(value) : value;
 
     return `
-${chalk.yellow('Quality Score:')} ${parentMetrics.qualityScore.toFixed(4)} → ${childMetrics.qualityScore.toFixed(4)}
-${chalk.yellow('Efficiency Score:')} ${parentMetrics.efficiencyScore.toFixed(4)} → ${childMetrics.efficiencyScore.toFixed(4)}
-${chalk.yellow('Final Score:')} ${parentMetrics.finalScore.toFixed(4)} → ${childMetrics.finalScore.toFixed(4)} (${percentChange.toFixed(2)}%)
+${label('Quality Score:')} ${parentMetrics.qualityScore.toFixed(4)} → ${childMetrics.qualityScore.toFixed(4)}
+${label('Efficiency Score:')} ${parentMetrics.efficiencyScore.toFixed(4)} → ${childMetrics.efficiencyScore.toFixed(4)}
+${label('Final Score:')} ${parentMetrics.finalScore.toFixed(4)} → ${childMetrics.finalScore.toFixed(4)} (${percentChange.toFixed(2)}%)
     `.trim();
   }
 
@@ -32,14 +37,7 @@ ${chalk.yellow('Final Score:')} ${parentMetrics.finalScore.toFixed(4)} → ${chi
    * @returns A plain-text comparison string.
    */
   createParentComparisonPlain(parentMetrics: any, childMetrics: any): string {
-    const finalScoreDiff = childMetrics.finalScore - parentMetrics.finalScore;
-    const percentChange = (finalScoreDiff / (Math.abs(parentMetrics.finalScore) || 0.0001)) * 100;
-
-    return `
-Quality Score: ${parentMetrics.qualityScore.toFixed(4)} → ${childMetrics.qualityScore.toFixed(4)}
-Efficiency Score: ${parentMetrics.efficiencyScore.toFixed(4)} → ${childMetrics.efficiencyScore.toFixed(4)}
-Final Score: ${parentMetrics.finalScore.toFixed(4)} → ${childMetrics.finalScore.toFixed(4)} (${percentChange.toFixed(2)}%)
-    `.trim();
+    return this.formatParentComparison(parentMetrics, childMetrics, false);
   }
 
   /**
@@ -48,16 +46,21 @@ Final Score: ${parentMetrics.finalScore.toFixed(4)} → ${childMetrics.finalScor
    * @returns A formatted string with performance details.
    */
   formatPerformanceMetrics(metrics: any): string {
+    return this.buildPerformanceMetrics(metrics, true);
+  }
+
+  private buildPerformanceMetrics(metrics: any, colorized: boolean): string {
     const heapUsedMB = (metrics.memoryUsage?.delta?.heapUsed / (1024 * 1024)).toFixed(2) || 'N/A';
     const executionTimeMs = metrics.executionTime?.toFixed(2) || 'N/A';
     const gcCount = metrics.gcStats?.count || 'N/A';
     const gcTime = metrics.gcStats?.totalTime?.toFixed(2) || 'N/A';
+    const label = (value: string) => colorized ? chalk.yellow(value) : value;
 
     return `
-${chalk.yellow('Execution Time:')} ${executionTimeMs} ms
-${chalk.yellow('Heap Used:')} ${heapUsedMB} MB
-${chalk.yellow('GC Count:')} ${gcCount}
-${chalk.yellow('GC Time:')} ${gcTime} ms
+${label('Execution Time:')} ${executionTimeMs} ms
+${label('Heap Used:')} ${heapUsedMB} MB
+${label('GC Count:')} ${gcCount}
+${label('GC Time:')} ${gcTime} ms
     `.trim();
   }
 
@@ -67,17 +70,7 @@ ${chalk.yellow('GC Time:')} ${gcTime} ms
    * @returns A plain-text string with performance details.
    */
   formatPerformanceMetricsPlain(metrics: any): string {
-    const heapUsedMB = (metrics.memoryUsage?.delta?.heapUsed / (1024 * 1024)).toFixed(2) || 'N/A';
-    const executionTimeMs = metrics.executionTime?.toFixed(2) || 'N/A';
-    const gcCount = metrics.gcStats?.count || 'N/A';
-    const gcTime = metrics.gcStats?.totalTime?.toFixed(2) || 'N/A';
-
-    return `
-Execution Time: ${executionTimeMs} ms
-Heap Used: ${heapUsedMB} MB
-GC Count: ${gcCount}
-GC Time: ${gcTime} ms
-    `.trim();
+    return this.buildPerformanceMetrics(metrics, false);
   }
 
   /**

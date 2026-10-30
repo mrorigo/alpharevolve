@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as process from 'process';
 import { EvaluationWorkspace } from './EvaluationWorkspace';
 import { runProcess } from './ProcessRunner';
+import type { ProcessRunResult } from './ProcessRunner';
 import { sandboxCommand } from './ExecutionSandbox';
 import { CandidateEvaluator, FitnessFunctionResult } from './types';
 import { PerformanceMetrics } from './safeEval';
@@ -206,38 +207,17 @@ export class BenchmarkRunner implements CandidateEvaluator {
             .replace(/\{target\}/g, () => workspace.targetFilePath)
             .replace(/\{test\}/g, () => workspace.testFilePath);
         const args = (this.options.benchmarkArgs || []).map(replacePathTokens);
-        const env: NodeJS.ProcessEnv = {
-            PATH: process.env.PATH || '/usr/bin:/bin',
-            HOME: workspace.homePath,
-            USERPROFILE: workspace.homePath,
-            TMPDIR: workspace.tempPath,
-            TMP: workspace.tempPath,
-            TEMP: workspace.tempPath,
-            CI: 'true',
-            ALPHA_BENCHMARK_WARMUP_RUNS: String(this.options.benchmarkWarmupRuns),
-            ALPHA_BENCHMARK_SAMPLE_RUNS: String(this.options.benchmarkSampleRuns),
-        };
-        for (const name of ['LANG', 'LC_ALL', 'TZ', 'SYSTEMROOT', 'WINDIR']) {
-            if (process.env[name]) env[name] = process.env[name];
-        }
-
-        const wrapped = sandboxCommand(this.options.benchmarkCommand!, args, {
-            workspaceRoot: workspace.root,
-            projectRoot: this.options.projectRoot,
-            allowNetwork: this.options.allowNetwork,
-            enabled: this.options.sandbox,
-        });
-        const result = await runProcess(wrapped.command, wrapped.args, {
-            cwd: workspace.root,
-            env,
-            timeoutMs: this.options.timeoutMs,
-            stdio: 'pipe',
-            maxOutputBytes: 1024 * 1024,
-        });
-
-        if (/sandbox_(?:apply|init)|operation not permitted/i.test(result.stderr)) {
-            throw new Error(`The operating system could not apply the requested evaluation sandbox: ${result.stderr.trim()}`);
-        }
+        const result = await this.runEvaluationCommand(
+            workspace,
+            this.options.benchmarkCommand!,
+            args,
+            {
+                ALPHA_BENCHMARK_WARMUP_RUNS: String(this.options.benchmarkWarmupRuns),
+                ALPHA_BENCHMARK_SAMPLE_RUNS: String(this.options.benchmarkSampleRuns),
+            },
+            1024 * 1024
+        );
+        this.assertSandboxStarted(result.stderr);
         if (result.timedOut) return { reason: `Benchmark command timed out after ${this.options.timeoutMs}ms` };
         if (result.exitCode !== 0) {
             return { reason: `Benchmark command exited with code ${String(result.exitCode)}${result.stderr.trim() ? `: ${result.stderr.trim().slice(-2000)}` : ''}` };
@@ -282,40 +262,17 @@ export class BenchmarkRunner implements CandidateEvaluator {
             path.relative(workspace.root, workspace.testFilePath),
             '--env', envPath,
         ];
-        const env: NodeJS.ProcessEnv = {
-            PATH: process.env.PATH || '/usr/bin:/bin',
-            HOME: workspace.homePath,
-            USERPROFILE: workspace.homePath,
-            TMPDIR: workspace.tempPath,
-            TMP: workspace.tempPath,
-            TEMP: workspace.tempPath,
-            CI: 'true',
-            ALPHA_METRICS_PATH: workspace.metricsFilePath,
-        };
-        for (const name of ['LANG', 'LC_ALL', 'TZ', 'SYSTEMROOT', 'WINDIR']) {
-            if (process.env[name]) env[name] = process.env[name];
-        }
-
-        const wrapped = sandboxCommand(this.options.testCommand!, args, {
-            workspaceRoot: workspace.root,
-            projectRoot: this.options.projectRoot,
-            allowNetwork: this.options.allowNetwork,
-            enabled: this.options.sandbox,
-        });
-        const result = await runProcess(wrapped.command, wrapped.args, {
-            cwd: workspace.root,
-            env,
-            timeoutMs: this.options.timeoutMs,
-            stdio: 'pipe',
-            maxOutputBytes: 4 * 1024 * 1024,
-        });
+        const result = await this.runEvaluationCommand(
+            workspace,
+            this.options.testCommand!,
+            args,
+            { ALPHA_METRICS_PATH: workspace.metricsFilePath },
+            4 * 1024 * 1024
+        );
 
         if (result.stdout) process.stdout.write(result.stdout);
         if (result.stderr) process.stderr.write(result.stderr);
-
-        if (/sandbox_(?:apply|init)|operation not permitted/i.test(result.stderr)) {
-            throw new Error(`The operating system could not apply the requested evaluation sandbox: ${result.stderr.trim()}`);
-        }
+        this.assertSandboxStarted(result.stderr);
 
         if (result.timedOut) {
             return { passed: false, reason: `Test suite timed out after ${this.options.timeoutMs}ms${result.stderr ? `: ${result.stderr.trim()}` : ''}` };
@@ -325,5 +282,54 @@ export class BenchmarkRunner implements CandidateEvaluator {
             return { passed: false, reason: `Test suite exited with code ${String(result.exitCode)}${detail ? `: ${detail.slice(-2000)}` : ''}` };
         }
         return { passed: true, reason: '' };
+    }
+
+    private evaluationEnvironment(
+        workspace: EvaluationWorkspace,
+        extra: NodeJS.ProcessEnv
+    ): NodeJS.ProcessEnv {
+        const env: NodeJS.ProcessEnv = {
+            PATH: process.env.PATH || '/usr/bin:/bin',
+            HOME: workspace.homePath,
+            USERPROFILE: workspace.homePath,
+            TMPDIR: workspace.tempPath,
+            TMP: workspace.tempPath,
+            TEMP: workspace.tempPath,
+            CI: 'true',
+            ...extra,
+        };
+        for (const name of ['LANG', 'LC_ALL', 'TZ', 'SYSTEMROOT', 'WINDIR']) {
+            if (process.env[name]) env[name] = process.env[name];
+        }
+        return env;
+    }
+
+    private async runEvaluationCommand(
+        workspace: EvaluationWorkspace,
+        command: string,
+        args: string[],
+        extraEnv: NodeJS.ProcessEnv,
+        maxOutputBytes: number
+    ): Promise<ProcessRunResult> {
+        const wrapped = sandboxCommand(command, args, {
+            workspaceRoot: workspace.root,
+            projectRoot: this.options.projectRoot,
+            allowNetwork: this.options.allowNetwork,
+            enabled: this.options.sandbox,
+        });
+        const result = await runProcess(wrapped.command, wrapped.args, {
+            cwd: workspace.root,
+            env: this.evaluationEnvironment(workspace, extraEnv),
+            timeoutMs: this.options.timeoutMs,
+            stdio: 'pipe',
+            maxOutputBytes,
+        });
+        return result;
+    }
+
+    private assertSandboxStarted(stderr: string): void {
+        if (/sandbox_(?:apply|init)|operation not permitted/i.test(stderr)) {
+            throw new Error(`The operating system could not apply the requested evaluation sandbox: ${stderr.trim()}`);
+        }
     }
 }

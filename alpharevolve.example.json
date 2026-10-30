@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "goal": "Improve the sorting implementation while preserving its behavior.",
+  "files": ["examples/sort_target.ts"],
+  "correctness": {
+    "command": "./node_modules/.bin/jest",
+    "args": ["--runInBand", "--cache=false", "{workspace}/examples/sort_benchmark.test.ts"]
+  },
+  "benchmark": {
+    "command": "./node_modules/.bin/ts-node",
+    "args": ["{workspace}/examples/sort_benchmark_command.ts"],
+    "warmupRuns": 1,
+    "sampleRuns": 5
+  },
+  "iterations": 10,
+  "evaluationRepeats": 1,
+  "timeoutMs": 120000,
+  "minImprovement": 0,
+  "noiseToleranceMultiplier": 1,
+  "scoreWeights": {
+    "quality": 0.7,
+    "efficiency": 0.3
+  },
+  "allowNetwork": false
+}

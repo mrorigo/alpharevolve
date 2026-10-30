@@ -116,6 +116,43 @@ Add `--benchmark-command` to measure candidate performance. The command runs onc
 
 AlphaRevolve uses the median sample for the efficiency score, calculated as `1000 / (1000 + medianMs)`. It stores the samples and median absolute deviation in the run history. The default is one warmup and five measured samples. Without a benchmark command, the CLI scores candidates on correctness only. Passing candidates then tie, so AlphaRevolve cannot rank them by speed.
 
+## Manifest-backed optimization
+
+For a task that changes one or more files, create a version 1 JSON manifest and run:
+
+```sh
+cp alpharevolve.example.json alpharevolve.json
+npm run cli -- optimize --config alpharevolve.json
+```
+
+The manifest lives at the project root, and file paths are relative to the directory containing the manifest. `files` is the complete allowlist of TypeScript and JavaScript files the model may change. Correctness runs first in a disposable workspace. Only a passing candidate is benchmarked, in a separate fresh workspace. Each command is launched directly with its `args` array, without shell expansion. Use `{workspace}` or `{primary}` in arguments when a workspace path is needed. Evaluation is sandboxed on macOS and denies network access by default; `allowNetwork: true` opts into network access.
+
+```json
+{
+  "version": 1,
+  "goal": "Improve sorting throughput while preserving behavior.",
+  "files": ["src/sort.ts", "src/sort_helpers.ts"],
+  "correctness": { "command": "./node_modules/.bin/jest", "args": ["--runInBand"] },
+  "benchmark": {
+    "command": "./node_modules/.bin/ts-node",
+    "args": ["{workspace}/examples/sort_benchmark_command.ts"],
+    "warmupRuns": 1,
+    "sampleRuns": 5
+  },
+  "iterations": 10,
+  "evaluationRepeats": 1,
+  "timeoutMs": 120000,
+  "minImprovement": 0,
+  "noiseToleranceMultiplier": 1,
+  "scoreWeights": { "quality": 0.7, "efficiency": 0.3 },
+  "allowNetwork": false
+}
+```
+
+`correctness` and `benchmark` each require a `command` and may include an `args` array. `warmupRuns` defaults to 1, `sampleRuns` to 5, and the other run settings shown above are optional. Benchmark commands receive `ALPHA_BENCHMARK_WARMUP_RUNS` and `ALPHA_BENCHMARK_SAMPLE_RUNS`; print one JSON object to stdout with the configured `warmupRuns` and exactly `sampleRuns` finite, non-negative `samplesMs` values. AlphaRevolve scores correctness as 1 for a passing candidate, combines it with benchmark efficiency using the configured weights, and uses sample median and median absolute deviation for ranking. It writes the candidate snapshots and metrics to `runs/<runId>.json` and `runs/<runId>.jsonl`, plus a patch and report at `runs/<runId>.patch` and `runs/<runId>.report.md`. Review the patch and report, then apply it yourself with the commands shown in the report. The existing single-file CLI remains available.
+
+The repository includes [alpharevolve.example.json](alpharevolve.example.json) as a runnable task definition for the sorting example.
+
 The sorting example includes a benchmark command that follows this protocol:
 
 ```bash

@@ -33,9 +33,23 @@ export type EvaluationResult =
 
 export type FitnessFunctionResult = FitnessScores | EvaluationResult;
 
-/** A candidate evaluator can be injected as an object or as the legacy function callback. */
+/** Complete source snapshot for a manifest-backed, multi-file candidate. */
+export interface CandidateSnapshot {
+  /** Repository-relative file paths mapped to complete file contents. */
+  files: Record<string, string>;
+  /** Primary file used by source-only integrations and older readers. */
+  primaryFile: string;
+}
+
+/** A source-only evaluator can be injected as an object or legacy callback. */
 export interface CandidateEvaluator {
   evaluate(solution: string): Promise<FitnessFunctionResult>;
+}
+
+/** Evaluator for a complete, allowlisted source snapshot. */
+export interface CandidateSnapshotEvaluator {
+  readonly candidateType: 'snapshot';
+  evaluate(candidate: CandidateSnapshot): Promise<FitnessFunctionResult>;
 }
 
 /** Persisted evaluation status and the raw scores used to form the median. */
@@ -55,6 +69,10 @@ export interface CandidateSolution {
   id: string;
   /** Actual solution content (code, configuration, etc.) */
   solution: string;
+  /** Complete selected-file contents for manifest-backed candidates. */
+  files?: Record<string, string>;
+  /** Primary source path for display and older source-only integrations. */
+  primaryFile?: string;
   /** Evaluation fitness metrics */
   fitness: FitnessScores;
   /** Missing on older database records; those records are treated as valid. */
@@ -120,6 +138,12 @@ export interface EvolutionOptions {
 interface EvolutionConfigBase {
   /** The initial candidate solution to optimize (e.g., code, function, parameter set) */
   initialSolution: string;
+
+  /** Initial contents of all configured files for a snapshot evaluator. */
+  initialFiles?: Record<string, string>;
+
+  /** Primary file path for snapshot evaluators. */
+  primaryFile?: string;
 
   /**
    * Optional system prompt for LLM behavior customization during code generation.
@@ -189,7 +213,7 @@ interface EvolutionConfigBase {
 /** Configure either the legacy callback or an object-based evaluator. */
 export type EvolutionConfig = EvolutionConfigBase & (
   | { fitnessFunction: (solution: string) => Promise<FitnessFunctionResult>; evaluator?: never }
-  | { evaluator: CandidateEvaluator; fitnessFunction?: never }
+  | { evaluator: CandidateEvaluator | CandidateSnapshotEvaluator; fitnessFunction?: never }
 );
 
 /**

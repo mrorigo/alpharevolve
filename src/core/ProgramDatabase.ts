@@ -23,7 +23,7 @@ export class ProgramDatabase {
   private programs: Map<string, CandidateSolution> = new Map();
   private metadata: Record<string, any> = {};
   private bestProgramId: string | null = null;
-  private readonly dbVersion: string = '1.2';
+  private readonly dbVersion: string = '1.3';
   private eventJournalPath?: string;
   private higherIsBetter = true;
   private minImprovement = 0;
@@ -119,7 +119,9 @@ export class ProgramDatabase {
     feedback?: string,
     generationPrompt?: string,
     feedbackPrompt?: string,
-    evaluation?: CandidateEvaluation
+    evaluation?: CandidateEvaluation,
+    files?: Record<string, string>,
+    primaryFile?: string
   ): CandidateSolution {
     // Generate a unique ID using both random bytes and timestamp
     const timestamp = new Date();
@@ -138,6 +140,8 @@ export class ProgramDatabase {
     const candidate: CandidateSolution = {
       id,
       solution,
+      files: files ? { ...files } : undefined,
+      primaryFile,
       fitness: fitnessCopy,
       iteration,
       parent: parentId,

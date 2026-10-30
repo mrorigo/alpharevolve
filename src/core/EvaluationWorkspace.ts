@@ -41,15 +41,22 @@ export class EvaluationWorkspace {
   readonly metricsFilePath: string;
   readonly homePath: string;
   readonly tempPath: string;
+  readonly targetFilePaths: string[];
+  readonly targetRelativePaths: string[];
 
   constructor(
     readonly projectRoot: string,
-    targetFilePath: string,
-    testFilePath: string
+    targetFilePath: string | string[],
+    testFilePath?: string
   ) {
     const absoluteProjectRoot = fs.realpathSync(projectRoot);
-    const targetRelative = relativeWithin(absoluteProjectRoot, targetFilePath);
-    const testRelative = relativeWithin(absoluteProjectRoot, testFilePath);
+    const requestedTargets = Array.isArray(targetFilePath) ? targetFilePath : [targetFilePath];
+    if (requestedTargets.length === 0) throw new Error('At least one target file is required');
+    this.targetRelativePaths = requestedTargets.map(filename => relativeWithin(absoluteProjectRoot, filename));
+    if (new Set(this.targetRelativePaths).size !== this.targetRelativePaths.length) {
+      throw new Error('Target file paths must be unique');
+    }
+    const testRelative = testFilePath ? relativeWithin(absoluteProjectRoot, testFilePath) : undefined;
     this.root = fs.mkdtempSync(path.join(os.tmpdir(), 'alpharevolve-evaluation-'));
 
     try {
@@ -74,12 +81,13 @@ export class EvaluationWorkspace {
         fs.symlinkSync(originalModules, path.join(this.root, 'node_modules'), 'dir');
       }
 
-      this.targetFilePath = path.join(this.root, targetRelative);
-      this.testFilePath = path.join(this.root, testRelative);
+      this.targetFilePaths = this.targetRelativePaths.map(relative => path.join(this.root, relative));
+      this.targetFilePath = this.targetFilePaths[0];
+      this.testFilePath = testRelative ? path.join(this.root, testRelative) : this.targetFilePath;
       this.metricsFilePath = path.join(this.root, '.alpha-metrics.json');
       this.homePath = path.join(this.root, '.evaluation-home');
       this.tempPath = path.join(this.root, '.evaluation-tmp');
-      fs.mkdirSync(path.dirname(this.targetFilePath), { recursive: true });
+      for (const targetPath of this.targetFilePaths) fs.mkdirSync(path.dirname(targetPath), { recursive: true });
       fs.mkdirSync(this.homePath);
       fs.mkdirSync(this.tempPath);
     } catch (error) {
@@ -90,6 +98,24 @@ export class EvaluationWorkspace {
 
   writeCandidate(solution: string): void {
     fs.writeFileSync(this.targetFilePath, solution, 'utf8');
+  }
+
+  /** Write a complete snapshot whose keys exactly match the configured target set. */
+  writeCandidates(files: Record<string, string>): void {
+    const actualPaths = Object.keys(files).sort();
+    const expectedPaths = [...this.targetRelativePaths].sort();
+    if (JSON.stringify(actualPaths) !== JSON.stringify(expectedPaths)) {
+      throw new Error('Candidate file paths must exactly match the configured target files');
+    }
+    for (const relative of this.targetRelativePaths) {
+      const absolute = path.resolve(this.root, relative);
+      const workspaceRelative = path.relative(this.root, absolute);
+      if (workspaceRelative.startsWith(`..${path.sep}`) || path.isAbsolute(workspaceRelative)) {
+        throw new Error(`Candidate file escapes the evaluation workspace: ${relative}`);
+      }
+      fs.mkdirSync(path.dirname(absolute), { recursive: true });
+      fs.writeFileSync(absolute, files[relative], 'utf8');
+    }
   }
 
   cleanup(): void {

@@ -5,7 +5,11 @@ import * as path from 'path';
 import { AlphaRevolve } from '../core/AlphaRevolve';
 import { EvolutionConfig } from '../core/types';
 import { BenchmarkRunner } from '../core/BenchmarkRunner';
+import { loadTaskManifest } from '../core/TaskManifest';
+import { ManifestEvaluator } from '../core/ManifestEvaluator';
+import { writeRunArtifacts } from '../core/RunArtifacts';
 import * as process from 'process';
+import { randomBytes } from 'crypto';
 
 function loadLocalEnvFile(filePath: string): void {
     if (!fs.existsSync(filePath)) return;
@@ -37,7 +41,8 @@ program
 
 program
     .command('optimize')
-    .argument('<targetFile>', 'Path to the file containing the code to optimize')
+    .argument('[targetFile]', 'Path to the file containing the code to optimize')
+    .option('-c, --config <path>', 'Path to an alpharevolve.json optimization manifest')
     .option('-t, --test <testFile>', 'Path to the test file for verification')
     .option('-i, --iterations <number>', 'Number of iterations', '10')
     .option('-m, --model <string>', 'LLM Model to use', process.env.OPENAI_MODEL || 'gpt-3.5-turbo')
@@ -59,6 +64,44 @@ program
     .description('Optimize a specific file using a test suite for feedback')
     .action(async (targetFile, options) => {
         try {
+            if (options.config) {
+                if (targetFile) throw new Error('Do not pass a target file together with --config.');
+                const loaded = loadTaskManifest(options.config);
+                const apiKey = options.apiKey || process.env.OPENAI_API_KEY;
+                if (!apiKey) throw new Error('API key is required. Use --api-key or set OPENAI_API_KEY.');
+                const baseUrl = options.baseUrl || process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
+                const runId = `run-${new Date().toISOString().replace(/[:.]/g, '-')}-${randomBytes(4).toString('hex')}`;
+                const primaryFile = loaded.config.files[0];
+                const initialSolution = loaded.initialFiles[primaryFile];
+                const config: EvolutionConfig = {
+                    initialSolution,
+                    initialFiles: loaded.initialFiles,
+                    primaryFile,
+                    evaluator: new ManifestEvaluator(loaded, !options.unsandboxedTests),
+                    problemDescription: loaded.config.goal,
+                    iterations: loaded.config.iterations,
+                    evaluationRepeats: loaded.config.evaluationRepeats,
+                    minImprovement: loaded.config.minImprovement,
+                    noiseToleranceMultiplier: loaded.config.noiseToleranceMultiplier,
+                    scoreWeights: loaded.config.scoreWeights,
+                    llmModel: options.model,
+                    temperature: 0.7,
+                    promptTemplate: `# Optimization goal\n{PROBLEM_DESCRIPTION}\n\n# Complete current file snapshot\n{CURRENT_SOLUTION}\n\n# Evaluation results\n{PERFORMANCE_INFO}\n\n# Prior feedback\n{PREVIOUS_FEEDBACK}\n\nReturn the complete updated snapshot as one JSON object with a "files" object. Preserve every configured file path.`,
+                    feedbackEnabled: true,
+                    databaseOptions: { saveEnabled: true, savePath: path.join(loaded.projectRoot, 'runs', `${runId}.json`) },
+                };
+                const evolver = new AlphaRevolve(config, baseUrl, apiKey, {
+                    verbose: true, saveResults: true, checkSyntaxBeforeEval: false, runId,
+                });
+                const result = await evolver.run();
+                const baseline = result.allCandidates.find(candidate => candidate.iteration === 0);
+                if (!baseline) throw new Error('Run completed without a persisted baseline candidate');
+                const artifacts = writeRunArtifacts(loaded, runId, baseline, result.bestCandidate);
+                console.log(`Patch: ${artifacts.patchPath}`);
+                console.log(`Report: ${artifacts.reportPath}`);
+                return;
+            }
+            if (!targetFile) throw new Error('Provide a target file or use --config alpharevolve.json.');
             const absoluteTarget = path.resolve(targetFile);
             if (!fs.existsSync(absoluteTarget)) {
                 console.error(`Error: Target file not found: ${absoluteTarget}`);

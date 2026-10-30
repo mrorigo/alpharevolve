@@ -27,7 +27,9 @@ export class PromptBuilder {
       // Use the initial solution if no candidate exists.
       return this.formatPromptTemplate(config.promptTemplate, {
         PROBLEM_DESCRIPTION: config.problemDescription,
-        CURRENT_SOLUTION: config.initialSolution,
+        CURRENT_SOLUTION: config.initialFiles
+          ? JSON.stringify({ files: config.initialFiles }, null, 2)
+          : config.initialSolution,
         PERFORMANCE_INFO: "This is the initial solution. No performance data available yet.",
         PREVIOUS_FEEDBACK: "",
       });
@@ -65,7 +67,9 @@ export class PromptBuilder {
 
     return this.formatPromptTemplate(config.promptTemplate, {
       PROBLEM_DESCRIPTION: config.problemDescription,
-      CURRENT_SOLUTION: candidate.solution,
+      CURRENT_SOLUTION: candidate.files
+        ? JSON.stringify({ files: candidate.files }, null, 2)
+        : candidate.solution,
       PERFORMANCE_INFO: performanceInfo,
       PREVIOUS_FEEDBACK: previousFeedback,
     });
@@ -116,6 +120,6 @@ export class PromptBuilder {
 
  Focus on making significant improvements with each iteration. Analyze the previous solution,
  identify bottlenecks, and apply appropriate optimizations. Consider all previous feedback.
- Your response should contain ONLY the complete improved solution, no explanations outside the code.`;
+ Your response should contain ONLY the complete improved solution, no explanations outside the code.${config.initialFiles ? '\n Return exactly one JSON object with a "files" property. Include every configured file path and its complete source as a string. Do not add or omit paths.' : ''}`;
   }
 }

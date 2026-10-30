@@ -705,6 +705,19 @@
                     }
                 }
 
+                const escapeHtml = value => String(value).replace(/[&<>"']/g, character => ({
+                    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+                })[character]);
+                const fileEntries = program.files && typeof program.files === 'object'
+                    ? Object.entries(program.files)
+                    : [];
+                const codeHtml = fileEntries.length
+                    ? fileEntries.map(([filename, source]) => `
+                        <details style="margin:8px 0; background:#111; border:1px solid #333; border-radius:5px; padding:10px;" ${filename === program.primaryFile ? 'open' : ''}>
+                            <summary style="cursor:pointer; font-weight:bold;">${escapeHtml(filename)}</summary>
+                            <pre style="overflow-x:auto;"><code>${escapeHtml(source)}</code></pre>
+                        </details>`).join('')
+                    : `<pre id="code">${escapeHtml(program.solution)}</pre>`;
                 // Assemble the full content
                 programDetailsContent.innerHTML = `
                     ${headerHtml}
@@ -718,7 +731,7 @@
                         </details>
                     ` : ''}
                     <h3><i class="fas fa-terminal"></i> Code</h3>
-                    <pre id="code">${program.solution}</pre>
+                    ${codeHtml}
                     ${program.feedback ? `
                         <details style="margin-bottom:20px; background:#111; border:1px solid #333; border-radius:5px; padding:10px;">
                             <summary style="cursor:pointer; font-weight:bold;">

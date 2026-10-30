@@ -1,6 +1,7 @@
 import {
   CandidateSolution,
   CandidateEvaluator,
+  CandidateSnapshotEvaluator,
   EvaluationResult,
   EvolutionConfig,
   EvolutionOptions,
@@ -69,7 +70,7 @@ function normalizeEvaluation(result: any): EvaluationResult {
  */
 export class AlphaRevolve {
   private readonly config: EvolutionConfig;
-  private readonly evaluator: CandidateEvaluator;
+  private readonly evaluator: CandidateEvaluator | CandidateSnapshotEvaluator;
   private readonly llmService: LlmService;
   private readonly feedbackService: FeedbackService;
   private readonly evaluationDatabase: ProgramDatabase;
@@ -111,7 +112,14 @@ export class AlphaRevolve {
     if (Boolean(config.evaluator) === Boolean(config.fitnessFunction)) {
       throw new Error('Configure exactly one of evaluator or fitnessFunction');
     }
-    this.evaluator = config.evaluator || { evaluate: config.fitnessFunction! };
+    this.evaluator = config.evaluator
+      ? config.evaluator as CandidateEvaluator | CandidateSnapshotEvaluator
+      : { evaluate: config.fitnessFunction! } as CandidateEvaluator;
+    if ('candidateType' in this.evaluator && this.evaluator.candidateType === 'snapshot') {
+      if (!config.initialFiles || !config.primaryFile || !Object.prototype.hasOwnProperty.call(config.initialFiles, config.primaryFile)) {
+        throw new Error('Snapshot evaluators require initialFiles and a primaryFile in the snapshot');
+      }
+    }
 
     this.config = {
       ...config,
@@ -187,13 +195,19 @@ export class AlphaRevolve {
     this.evaluationDatabase.setMetadata('options', this.options);
   }
 
-  private async evaluateSolution(solution: string): Promise<{
+  private async evaluateSolution(solution: string, files?: Record<string, string>): Promise<{
     fitness: FitnessScores;
     evaluation: NonNullable<CandidateSolution['evaluation']>;
   }> {
     const runs: EvaluationResult[] = [];
     for (let index = 0; index < this.config.evaluationRepeats!; index++) {
-      runs.push(normalizeEvaluation(await this.evaluator.evaluate(solution)));
+      let result;
+      if ('candidateType' in this.evaluator && this.evaluator.candidateType === 'snapshot') {
+        result = await this.evaluator.evaluate({ files: files ?? {}, primaryFile: this.config.primaryFile! });
+      } else {
+        result = await (this.evaluator as CandidateEvaluator).evaluate(solution);
+      }
+      runs.push(normalizeEvaluation(result));
     }
 
     const validRuns = runs.filter(
@@ -308,7 +322,7 @@ export class AlphaRevolve {
    * @param solution Code to validate
    * @returns True if valid, false if invalid
    */
-  private checkSyntax(solution: string): boolean {
+  private checkSyntax(solution: string, filename = 'temp.ts'): boolean {
     try {
       // Use TypeScript compiler API to check syntax
       // We import it dynamically to avoid hard dependency if possible, 
@@ -316,10 +330,14 @@ export class AlphaRevolve {
       const ts = require('typescript');
 
       const sourceFile = ts.createSourceFile(
-        'temp.ts',
+        filename,
         solution,
         ts.ScriptTarget.Latest,
-        true // setParentNodes
+        true,
+        /\.tsx$/i.test(filename) ? ts.ScriptKind.TSX
+          : /\.(jsx|mjs|cjs)$/i.test(filename) ? ts.ScriptKind.JSX
+            : /\.(js|mts|cts)$/i.test(filename) ? ts.ScriptKind.JS
+              : ts.ScriptKind.TS
       );
 
       // Check for parse diagnostics
@@ -346,6 +364,24 @@ export class AlphaRevolve {
       } catch (e) {
         return false;
       }
+    }
+  }
+
+  private parseSnapshot(generated: string): Record<string, string> | null {
+    if (!this.config.initialFiles || !this.config.primaryFile) return null;
+    let text = generated.trim();
+    const fenced = text.match(/^```(?:json)?\s*\n([\s\S]*?)\n```$/i);
+    if (fenced) text = fenced[1].trim();
+    try {
+      const parsed = JSON.parse(text);
+      const files = parsed?.files;
+      if (!files || typeof files !== 'object' || Array.isArray(files)) return null;
+      const expected = Object.keys(this.config.initialFiles).sort();
+      const actual = Object.keys(files).sort();
+      if (JSON.stringify(expected) !== JSON.stringify(actual) || actual.some(key => typeof files[key] !== 'string')) return null;
+      return files;
+    } catch {
+      return null;
     }
   }
 
@@ -404,22 +440,33 @@ export class AlphaRevolve {
       console.log(chalk.yellow(`Response Length: ${responseLines.length} lines`));
 
       // Extract code from the LLM response
-      const childSolution = CodeExtractor.extractSolution(generatedText);
+      const snapshotMode = Boolean(this.config.initialFiles && this.config.primaryFile);
+      const childFiles = snapshotMode ? this.parseSnapshot(generatedText) : undefined;
+      const childSolution = childFiles
+        ? childFiles[this.config.primaryFile!]
+        : snapshotMode ? '' : CodeExtractor.extractSolution(generatedText);
 
       // Validate solution has actual code content
-      if (!childSolution || childSolution.trim().length < 10) {
+      if (snapshotMode ? !childSolution.trim() : !childSolution || childSolution.trim().length < 10) {
         console.error('Generated solution is empty or too short');
         return null;
       }
 
+      if (snapshotMode && !childFiles) {
+        console.error('Generated snapshot must be JSON with the exact configured file set');
+        return null;
+      }
+
       // Check if the solution contains code (has function declarations or expressions)
-      if (!CodeExtractor.hasCode(childSolution)) {
+      if (!snapshotMode && !CodeExtractor.hasCode(childSolution)) {
         console.error('Generated text does not contain valid code');
         return null;
       }
 
       // Validate syntax if enabled
-      if (this.options.checkSyntaxBeforeEval && !this.checkSyntax(childSolution)) {
+      if (this.options.checkSyntaxBeforeEval && (childFiles
+        ? Object.entries(childFiles).some(([file, source]) => !this.checkSyntax(source, file))
+        : !this.checkSyntax(childSolution))) {
         console.error('Generated solution has syntax errors');
         return null;
       }
@@ -429,7 +476,7 @@ export class AlphaRevolve {
         console.log('🧪 Evaluating generated solution...');
       }
 
-      const childResult = await this.evaluateSolution(childSolution);
+      const childResult = await this.evaluateSolution(childSolution, childFiles ?? undefined);
       const childFitness = childResult.fitness;
 
       if (childResult.evaluation.status === 'invalid') {
@@ -454,7 +501,7 @@ export class AlphaRevolve {
           // Pass the raw template (or empty string) to FeedbackService, which now handles interpolation.
           feedbackPrompt = this.config.feedbackPromptTemplate || '';
           feedback = await this.feedbackService.generateFeedback(
-            childSolution,
+            childFiles ? JSON.stringify({ files: childFiles }) : childSolution,
             childFitness,
             parentCandidate.fitness,
             performanceMetrics,
@@ -496,7 +543,9 @@ export class AlphaRevolve {
         feedback,
         prompt, // Save the generation prompt
         feedback ? feedbackPrompt : undefined, // Save the feedback prompt if feedback exists
-        childResult.evaluation
+        childResult.evaluation,
+        childFiles ?? undefined,
+        childFiles ? this.config.primaryFile : undefined
       );
     } catch (error) {
       console.error(`Error in iteration ${iteration + 1}:`, error);
@@ -516,7 +565,7 @@ export class AlphaRevolve {
       this.display.displaySuccess('Evaluating initial solution...');
 
       // Evaluate the initial solution
-      const initialResult = await this.evaluateSolution(this.config.initialSolution);
+      const initialResult = await this.evaluateSolution(this.config.initialSolution, this.config.initialFiles);
 
       // Add initial solution to the database
       this.evaluationDatabase.addProgram(
@@ -527,7 +576,9 @@ export class AlphaRevolve {
         undefined,
         undefined,
         undefined,
-        initialResult.evaluation
+        initialResult.evaluation,
+        this.config.initialFiles,
+        this.config.primaryFile
       );
 
       this.display.displayFitnessMetrics(initialResult.fitness);

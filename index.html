@@ -4,1047 +4,2005 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AlphaRevolve Run Explorer</title>
+    <meta name="description" content="Visualize program evolution: lineage trees, fitness landscapes, benchmark evidence, prompts, feedback, and metrics.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <style>
-        /* General Styles */
+        /* ============================================================
+           Run Explorer 2.0 — design tokens
+           Brand system borrowed from the AlphaRevolve landing page.
+           ============================================================ */
+        :root {
+            --bg: #0a0a0c;
+            --surface: #131316;
+            --surface-2: #1c1c21;
+            --surface-3: #242429;
+            --border: #27272a;
+            --border-lit: #3f3f46;
+            --border-soft: rgba(255, 255, 255, .06);
+
+            --text: #ffffff;
+            --text-2: #9ca3af;
+            --text-3: #6b7280;
+
+            --primary: #3b82f6;
+            --primary-soft: rgba(59, 130, 246, .12);
+            --accent: #10b981;
+            --accent-soft: rgba(16, 185, 129, .12);
+            --danger: #f87171;
+            --danger-soft: rgba(248, 113, 113, .12);
+            --warn: #fbbf24;
+            --glow: rgba(59, 130, 246, .5);
+            --glow-accent: rgba(16, 185, 129, .5);
+
+            --radius: 16px;
+            --radius-sm: 10px;
+            --shadow-lg: 0 10px 30px rgba(0, 0, 0, .5);
+
+            --font-display: 'Space Grotesk', sans-serif;
+            --font-body: 'Inter', sans-serif;
+            --font-mono: 'Fira Code', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+            --nav-h: 64px;
+            --speed: 150ms;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #000; /* Solid black background for binary look */
-            color: #fff;
-            overflow-x: hidden; /* Prevent horizontal scroll */
-        }
-
-        /* Performance metrics styles */
-        .metric-card {
-            transition: background-color 0.2s ease;
-        }
-
-        .metric-card:hover {
-            background-color: #252525 !important;
-        }
-
-        details summary {
-            transition: color 0.2s ease;
-        }
-
-        details summary:hover {
-            color: #0f0;
-        }
-
-        .program-header {
-            transition: all 0.3s ease;
-        }
-
-        .program-header:hover {
-            background-color: rgba(255, 255, 255, 0.05);
-            border-color: #555;
-        }
-
-        .container {
-            width: 95%;
-            max-width: 1400px;
-            margin: 10px auto;
-            background-color: #111; /* Solid dark background */
-            padding: 15px;
-            border-radius: 5px;
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
-            border: 1px solid #333;
-        }
-
-        h1 {
-            text-align: center;
-            color: #fff;
-            margin-bottom: 15px;
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7);
-            text-transform: uppercase;
-        }
-
-        /* File Input */
-        #code, #feedback {
-            font-family: 'Courier New', monospace;
-            background-color: rgba(0, 0, 0, 0.1);
-            padding: 15px;
-            border-radius: var(--radius-md);
-            white-space: pre-wrap; /* Allow text to wrap while preserving whitespace */
-            overflow-wrap: break-word; /* Break words if needed to prevent overflow */
-            word-break: break-word; /* For better wrapping of long words */
-            color: var(--text-primary);
-            border: 1px solid var(--border-light);
-            box-shadow: var(--shadow-inset);
-            max-width: 100%; /* Ensure content stays within container */
-        }
-
-        #fileInput:hover {
-            background-color: #0056b3;
-        }
-        #metadata {
-            margin-bottom: 30px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            padding: 20px;
-            border-radius: 10px;
-            background-color: rgba(255, 255, 255, 0.05);
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
-        }
-
-        h1, h2, h3 {
-            margin-top: 0;
-        }
-
-        #metadataContent p {
+            font-family: var(--font-body);
+            background-color: var(--bg);
+            color: var(--text);
             line-height: 1.6;
-            color: #eee;
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            min-height: 100vh;
         }
 
-        /* Program List Section */
-        #programList {
-            list-style: none;
-            padding: 0;
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
+        h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 700; }
+
+        a { text-decoration: none; color: inherit; transition: color .2s; }
+        ul { list-style: none; }
+        button { font-family: inherit; cursor: pointer; }
+
+        :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
+        ::selection { background: rgba(59, 130, 246, .35); }
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #2e2e34; border-radius: 8px; border: 2px solid var(--bg); }
+        ::-webkit-scrollbar-thumb:hover { background: #3c3c44; }
+
+        .text-gradient {
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
 
-        .programItem {
-            border: 1px solid #333;
-            margin-bottom: 4px;
-            padding: 6px 8px;
-            border-radius: 4px;
-            background-color: #1a1a1a;
-            cursor: pointer;
-            transition: transform 0.15s, box-shadow 0.15s;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
-            transform: translateY(0);
-            font-size: 12px;
+        /* Background glow orbs — matches the landing page atmosphere */
+        .bg-glow {
+            position: fixed;
+            width: 600px; height: 600px;
+            background: radial-gradient(circle, var(--glow) 0%, transparent 70%);
+            opacity: .10;
+            filter: blur(90px);
+            z-index: -1;
+            border-radius: 50%;
+            pointer-events: none;
         }
+        .bg-glow-1 { top: -260px; left: -220px; }
+        .bg-glow-2 { bottom: -260px; right: -220px; background: radial-gradient(circle, var(--glow-accent) 0%, transparent 70%); }
 
-        .programItem:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
-        }
-
-        .programItem h3 {
-            margin-top: 0;
-            color: #fff;
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
-        }
-
-        .programItem p {
-            line-height: 1.6;
-            color: #eee;
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
-        }
-
-        /* Program Details Section */
-        #programDetails {
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            padding: 20px;
-            border-radius: 10px;
-            background-color: rgba(255, 255, 255, 0.05);
-            margin-top: 30px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
-        }
-
-        #programDetails h2 {
-            margin-top: 0;
-            color: #fff;
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
-        }
-
-        #programDetailsContent p {
-            line-height: 1.6;
-            color: #eee;
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
-        }
-
-        #code, #feedback {
-            font-family: 'Courier New', monospace;
-            :root {
-                --bg-primary: #000;
-                --bg-secondary: #111;
-                --bg-tertiary: #1a1a1a;
-                --bg-hover: #2a2a2a;
-
-                --text-primary: #fff;
-                --text-secondary: #eee;
-                --text-muted: #888;
-
-                --border-light: rgba(255, 255, 255, 0.2);
-                --border-dark: #333;
-
-                --accent-color: #00ff00;
-                --danger-color: #a00;
-                --success-color: #0a0;
-
-                /* Simplified shadows for better performance */
-                --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
-                --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.3);
-                --shadow-lg: 0 2px 5px rgba(0, 0, 0, 0.5);
-                --shadow-inset: inset 0 1px 3px rgba(0, 0, 0, 0.3);
-
-                --radius-sm: 3px;
-                --radius-md: 5px;
-                --radius-lg: 8px;
-
-                --font-size-xs: 11px;
-                --font-size-sm: 12px;
-                --font-size-md: 14px;
-                --font-size-lg: 16px;
-                --font-size-xl: 18px;
-            }
-        }
-
-        #statisticsContent {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-        }
-
-        .statisticItem {
-            padding: 15px;
-            border-radius: 8px;
-            background-color: rgba(0, 0, 0, 0.1);
-            text-align: center;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
-        }
-
-        .statisticItem h3 {
-            margin-top: 0;
-            color: #fff;
-            font-size: 1.2em;
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
-        }
-
-        .statisticItem p {
-            line-height: 1.4;
-            color: #eee;
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
-        }
-        /* Layout Styles */
-        .main-content {
+        /* ============ Top navigation ============ */
+        nav {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            height: var(--nav-h);
             display: flex;
-            flex-wrap: wrap;
-            gap: 15px;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 0 clamp(1rem, 3vw, 2rem);
+            background: rgba(10, 10, 12, .82);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border-soft);
+        }
+        .logo {
+            display: flex; align-items: center; gap: .5rem;
+            font-family: var(--font-display); font-weight: 700; font-size: 1.05rem;
+            white-space: nowrap;
+        }
+        .logo .wordmark { opacity: .9; }
+        .logo .wordmark b { color: var(--primary); font-weight: 700; }
+        .logo svg { width: 24px; height: 24px; }
+        .nav-meta {
+            display: flex; align-items: center; gap: .5rem;
+            min-width: 0;
+            font-family: var(--font-mono); font-size: .72rem; color: var(--text-3);
+        }
+        .chip {
+            display: inline-flex; align-items: center; gap: .375rem;
+            padding: .25rem .625rem;
+            border: 1px solid var(--border);
+            border-radius: 9999px;
+            background: rgba(255, 255, 255, .03);
+            font-size: .72rem;
+            color: var(--text-2);
+            white-space: nowrap;
+        }
+        .chip i { font-size: .68rem; color: var(--primary); }
+        .chip .chip-value { color: var(--text); }
+        .chip.chip-accent i { color: var(--accent); }
+        .chip .chip-model { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+
+        .btn {
+            display: inline-flex; align-items: center; gap: .5rem;
+            padding: .55rem 1.15rem;
+            border-radius: 9999px;
+            font-weight: 600;
+            font-family: var(--font-display);
+            font-size: .85rem;
+            border: 1px solid transparent;
+            transition: all var(--speed) ease;
+            white-space: nowrap;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            color: #fff;
+            box-shadow: 0 4px 15px rgba(59, 130, 246, .3);
+        }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(59, 130, 246, .4); }
+        .btn-secondary {
+            background: rgba(255, 255, 255, .05);
+            border-color: var(--border);
+            color: var(--text);
+        }
+        .btn-secondary:hover { background: rgba(255, 255, 255, .1); border-color: var(--text-3); }
+
+        /* ============ Page scaffold ============ */
+        .page {
+            max-width: 1560px;
+            margin: 0 auto;
+            padding: 1.5rem clamp(1rem, 3vw, 2rem) 3rem;
         }
 
-        .primary-section {
-            flex: 3;
-            min-width: 60%;
-        }
-
-        .secondary-section {
-            flex: 1;
-            min-width: 250px;
-        }
-
-        /* Programs List - reduced prominence */
-        .program-list-container {
-            margin-top: 15px;
-            font-size: 11px;
-            max-height: 300px;
-            overflow-y: auto;
-        }
-
-        .program-list-container h2 {
-            font-size: 14px;
-            margin-bottom: 8px;
-            color: #888;
-        }
-
-        #programList {
-            display: block;
-            max-height: 250px;
-            overflow-y: auto;
-        }
-
-        /* More compact program list */
-        .programItem {
-            border: 1px solid var(--border-dark);
-            margin-bottom: 3px;
-            padding: 4px 6px;
-            border-radius: var(--radius-sm);
-            background-color: var(--bg-tertiary);
-            cursor: pointer;
-            font-size: var(--font-size-xs);
-        }
-
-        .programItem:hover {
-            background-color: var(--bg-hover);
-        }
-            box-shadow: none;
-        }
-        /* Tree View Styles - Enhanced */
-        #treeContainer {
-            margin-bottom: 20px;
-            padding: 15px;
-            border: 1px solid #444;
-            border-radius: 8px;
-            background-color: #151515;
-            font-size: 13px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-        }
-
-        #treeContainer h2 {
-            font-size: var(--font-size-xl);
-            text-transform: uppercase;
-            color: var(--accent-color);
-            margin-bottom: 15px;
-        }
-
-        #treeView {
-            padding: 10px;
-            overflow-x: auto;
-            max-height: 500px;
-            overflow-y: auto;
-        }
-
-        #treeView ul {
-            list-style-type: none;
-            padding-left: 25px;
-            margin: 0;
-        }
-
-        #treeView li {
-            margin: 8px 0;
+        /* Hero: welcome state (before load) + stat strip (after load) */
+        .hero-welcome {
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--surface);
+            padding: clamp(2.5rem, 6vw, 4.5rem) 2rem;
+            text-align: center;
             position: relative;
-            padding-left: 20px;
+            overflow: hidden;
+            margin-bottom: 1.5rem;
+        }
+        .hero-welcome::before {
+            content: '';
+            position: absolute; inset: 0;
+            background: linear-gradient(45deg, rgba(59, 130, 246, .06), transparent 55%);
+            pointer-events: none;
+        }
+        .hero-welcome h1 { font-size: clamp(1.6rem, 3.2vw, 2.4rem); letter-spacing: -.02em; margin: 1rem 0 .75rem; }
+        .hero-welcome p.sub { color: var(--text-2); max-width: 560px; margin: 0 auto 2rem; font-size: 1rem; }
+        .hero-welcome svg.evo-motif { width: 300px; max-width: 70%; height: auto; margin: 0 auto; }
+        .drop-hint { margin-top: 1.25rem; color: var(--text-3); font-size: .78rem; }
+        .drop-hint kbd {
+            font-family: var(--font-mono); font-size: .68rem;
+            background: var(--surface-2); border: 1px solid var(--border);
+            border-radius: 6px; padding: .1rem .4rem;
         }
 
+        .hero-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            margin-bottom: 1.5rem;
+        }
+        .hero-stat {
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--surface);
+            padding: 1rem 1.15rem;
+            position: relative;
+            overflow: hidden;
+            transition: border-color var(--speed) ease, transform var(--speed) ease;
+        }
+        .hero-stat::before {
+            content: '';
+            position: absolute; top: 0; left: 0; right: 0; height: 2px;
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+            opacity: 0;
+            transition: opacity var(--speed) ease;
+        }
+        .hero-stat:hover { border-color: var(--primary); transform: translateY(-3px); }
+        .hero-stat:hover::before { opacity: 1; }
+        .hero-stat .label {
+            display: flex; align-items: center; gap: .4rem;
+            font-size: .68rem; font-weight: 600; letter-spacing: .08em;
+            text-transform: uppercase; color: var(--text-3);
+        }
+        .hero-stat .label i { color: var(--primary); font-size: .7rem; }
+        .hero-stat .value {
+            font-family: var(--font-display);
+            font-size: 1.55rem; font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            line-height: 1.25; margin-top: .35rem;
+        }
+        .hero-stat .value .unit { font-size: .8rem; font-weight: 500; color: var(--text-2); margin-left: .15rem; }
+        .hero-stat .detail { font-size: .72rem; color: var(--text-3); margin-top: .1rem; }
+        .hero-stat .value.pos { color: var(--accent); }
+        .hero-stat .value.neg { color: var(--danger); }
+
+        /* Error banner */
+        .error-banner {
+            display: none;
+            align-items: flex-start; gap: .75rem;
+            border: 1px solid rgba(248, 113, 113, .4);
+            border-radius: var(--radius-sm);
+            background: var(--danger-soft);
+            color: #fecaca;
+            padding: .85rem 1.1rem;
+            font-size: .85rem;
+            margin-bottom: 1rem;
+        }
+        .error-banner.show { display: flex; }
+        .error-banner i { color: var(--danger); line-height: 1.6; }
+
+        .layout[hidden] { display: none; }
+        .hero-stats[hidden] { display: none; }
+
+        /* ============ Dashboard grid ============ */
+        .layout {
+            display: grid;
+            grid-template-columns: 330px minmax(0, 1fr) 330px;
+            gap: 16px;
+            align-items: start;
+        }
+        .rail-left, .rail-right {
+            position: sticky;
+            top: calc(var(--nav-h) + 16px);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            max-height: calc(100vh - var(--nav-h) - 32px);
+            overflow-y: auto;
+            padding-right: 2px;
+        }
+        .col-center { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+        /* ============ Cards ============ */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            transition: border-color var(--speed) ease;
+        }
+        .card-head {
+            display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+            padding: .95rem 1.1rem .8rem;
+            border-bottom: 1px solid var(--border-soft);
+        }
+        .card-head h2 {
+            display: flex; align-items: center; gap: .55rem;
+            font-size: .78rem; font-weight: 600;
+            letter-spacing: .1em; text-transform: uppercase;
+            color: var(--text-2);
+        }
+        .card-head h2 i { color: var(--primary); font-size: .8rem; }
+        .card-body { padding: 1rem 1.1rem 1.1rem; }
+        .card-tools { display: flex; align-items: center; gap: .4rem; }
+
+        .placeholder {
+            color: var(--text-3);
+            font-size: .8rem;
+            padding: .75rem 0;
+            text-align: center;
+        }
+        .placeholder i { display: block; font-size: 1.4rem; margin-bottom: .5rem; color: var(--text-3); opacity: .6; }
+
+        /* Mini icon button (in card headers) */
+        .icon-btn {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 28px; height: 28px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: rgba(255, 255, 255, .03);
+            color: var(--text-2);
+            font-size: .72rem;
+            transition: all var(--speed) ease;
+        }
+        .icon-btn:hover { color: var(--text); border-color: var(--border-lit); background: var(--surface-2); }
+
+        /* Copy chip */
+        .copy-btn {
+            display: inline-flex; align-items: center; gap: .35rem;
+            background: rgba(255, 255, 255, .04);
+            border: 1px solid var(--border);
+            color: var(--text-3);
+            font-size: .68rem;
+            border-radius: 7px;
+            padding: .25rem .55rem;
+            transition: all var(--speed) ease;
+        }
+        .copy-btn:hover { color: var(--text); border-color: var(--border-lit); }
+        .copy-btn.ok { color: var(--accent); border-color: rgba(16, 185, 129, .4); }
+
+        /* ============ Evolution tree ============ */
+        .tree-legend { display: flex; flex-wrap: wrap; gap: .35rem .8rem; padding: .55rem 1.1rem; font-size: .66rem; color: var(--text-3); border-bottom: 1px solid var(--border-soft); }
+        .legend-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: .3rem; vertical-align: 1px; }
+        .legend-dot.best { background: var(--accent); box-shadow: 0 0 6px var(--glow-accent); }
+        .legend-dot.improved { background: var(--primary); }
+        .legend-dot.degraded { background: var(--danger); }
+        .legend-dot.neutral { background: #52525b; }
+
+        #treeView { padding: .85rem .9rem 1rem; overflow-x: auto; font-size: .8rem; }
+        #treeView ul { padding-left: 18px; margin: 2px 0; }
+        #treeView > ul { padding-left: 2px; }
+        #treeView li { position: relative; }
         #treeView li::before {
             content: '';
-            position: absolute;
-            left: 0;
-            top: 13px;
-            width: 15px;
-            height: 2px;
-            background: #444;
+            position: absolute; left: 7px; top: 20px;
+            width: 1.5px; height: calc(100% - 20px);
+            background: linear-gradient(var(--border-lit), transparent);
         }
+        #treeView > ul > li::before { display: none; }
 
-        #treeView li::after {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 0;
-            height: 100%;
-            width: 2px;
-            background: #333;
-            transform: translateY(-50%);
-            z-index: 0;
+        .tn-row { display: flex; align-items: center; gap: 5px; margin: 3px 0; }
+        .tn-caret {
+            flex: 0 0 auto;
+            width: 17px; height: 17px;
+            display: inline-flex; align-items: center; justify-content: center;
+            border: none; background: transparent; color: var(--text-3);
+            font-size: .58rem;
+            border-radius: 5px;
+            transition: color var(--speed) ease, transform var(--speed) ease;
         }
+        .tn-caret:not(:disabled):hover { color: var(--text); background: var(--surface-2); }
+        .tn-caret.opened i { transform: rotate(0deg); }
+        .tn-caret i { transform: rotate(-90deg); transition: transform var(--speed) ease; }
+        .tn-caret:disabled { visibility: hidden; }
 
-        #treeView li:last-child::after {
-            height: 13px;
-        }
-
-        #treeView a {
-            display: inline-block;
-            padding: 6px 10px;
-            background-color: #222;
-            border: 1px solid #444;
-            border-radius: var(--radius-sm);
-            color: var(--text-primary);
-            text-decoration: none;
+        .tn-pill {
+            display: inline-flex; align-items: center; gap: .45rem;
+            padding: .28rem .7rem;
+            border-radius: 9999px;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            color: var(--text-2);
+            font-family: var(--font-body);
+            font-size: .74rem;
+            cursor: pointer;
             position: relative;
             z-index: 1;
+            transition: all var(--speed) ease;
+        }
+        .tn-pill .tn-iter { font-weight: 600; font-variant-numeric: tabular-nums; }
+        .tn-pill .tn-score {
+            font-family: var(--font-mono); font-size: .66rem;
+            font-variant-numeric: tabular-nums;
+            color: var(--text-3);
+        }
+        .tn-pill:hover { border-color: var(--border-lit); color: var(--text); background: var(--surface-3); }
+        .tn-pill.improved { border-color: rgba(59, 130, 246, .45); }
+        .tn-pill.improved .tn-iter i { color: var(--primary); }
+        .tn-pill.degraded { border-color: rgba(248, 113, 113, .45); }
+        .tn-pill.degraded .tn-iter i { color: var(--danger); }
+        .tn-pill.best {
+            border-color: var(--accent);
+            background: rgba(16, 185, 129, .1);
+            color: #d1fae5;
+        }
+        .tn-pill.best .tn-iter i { color: var(--accent); }
+        .tn-pill.best .tn-score { color: var(--accent); }
+        .tn-pill.selected {
+            color: var(--text);
+            border-color: var(--primary);
+            box-shadow: 0 0 0 1px var(--primary);
+        }
+        @keyframes node-pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, .45); }
+            50% { box-shadow: 0 0 10px 2px rgba(16, 185, 129, .55); }
+        }
+        .tn-pill.best:not(.selected) { animation: node-pulse 3s ease-in-out infinite; }
+        .xhl { border-color: var(--primary) !important; background: var(--primary-soft) !important; }
+
+        /* ============ Program list ============ */
+        .search-box { position: relative; }
+        .search-box i { position: absolute; left: .55rem; top: 50%; transform: translateY(-50%); font-size: .68rem; color: var(--text-3); }
+        .search-box input {
+            width: 100%;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-family: var(--font-body);
+            font-size: .78rem;
+            padding: .4rem .6rem .4rem 1.7rem;
+            transition: border-color var(--speed) ease;
+        }
+        .search-box input::placeholder { color: var(--text-3); }
+        .search-box input:focus { outline: none; border-color: var(--primary); }
+
+        .filter-chips { display: flex; gap: .35rem; padding: .6rem 1.1rem 0; flex-wrap: wrap; }
+        .fchip {
+            padding: .22rem .6rem;
+            border-radius: 9999px;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--text-3);
+            font-size: .68rem; font-weight: 500;
+            transition: all var(--speed) ease;
+        }
+        .fchip:hover { color: var(--text-2); border-color: var(--border-lit); }
+        .fchip.active { color: var(--primary); border-color: var(--primary); background: var(--primary-soft); }
+        .fchip .count { font-variant-numeric: tabular-nums; opacity: .7; margin-left: .2rem; }
+
+        #programList { padding: .6rem .7rem .7rem; overflow-y: auto; max-height: 420px; }
+        .pl-item {
+            display: flex; align-items: center; gap: .5rem;
+            padding: .45rem .6rem;
+            border-radius: var(--radius-sm);
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all var(--speed) ease;
+        }
+        .pl-item:hover { background: var(--surface-2); border-color: var(--border); }
+        .pl-item.selected { background: var(--primary-soft); border-color: rgba(59, 130, 246, .4); }
+        .pl-item .pl-iter {
+            font-family: var(--font-mono); font-size: .68rem;
+            color: var(--text-2); font-variant-numeric: tabular-nums;
+            flex: 0 0 58px;
+        }
+        .pl-item .pl-score {
+            margin-left: auto;
+            font-family: var(--font-mono); font-size: .72rem;
+            font-variant-numeric: tabular-nums;
+            color: var(--text);
+        }
+        .pl-item .pl-status { width: 14px; text-align: center; font-size: .68rem; }
+        .pl-item .pl-status.up { color: var(--primary); }
+        .pl-item .pl-status.down { color: var(--danger); }
+        .pl-item .pl-status.best { color: var(--accent); }
+        .list-note { font-size: .7rem; color: var(--text-3); text-align: center; padding: .2rem 0 .4rem; }
+
+        /* ============ Score chart ============ */
+        #chartBox { padding: .6rem 1rem .35rem; display: flex; justify-content: center; }
+        #chartBox svg {
+            display: block;
+            height: 190px;
+            width: auto;
+            max-width: 100%;
+        }
+        .chart-empty { padding: 1.25rem; }
+        .chart-axis { stroke: var(--border-lit); stroke-width: 1; }
+        .chart-bar { cursor: pointer; transition: opacity var(--speed) ease; }
+        .chart-bar:hover { opacity: .8; }
+        .chart-bar rect { rx: 3; }
+        .chart-bar.selected rect { filter: drop-shadow(0 0 4px var(--glow-accent)); }
+        .chart-label { fill: var(--text-3); font-family: var(--font-mono); font-size: 9px; }
+        .chart-val { fill: var(--text-2); font-family: var(--font-mono); font-size: 9px; }
+
+        /* ============ Program details ============ */
+        .d-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 1rem; padding: 1.15rem 1.25rem 1rem; border-bottom: 1px solid var(--border-soft); }
+        .d-title { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+        .d-title h2 { font-size: 1.3rem; font-variant-numeric: tabular-nums; }
+        .badge {
+            display: inline-flex; align-items: center; gap: .3rem;
+            padding: .2rem .6rem; border-radius: 9999px;
+            font-family: var(--font-display); font-size: .62rem; font-weight: 700;
+            letter-spacing: .08em; text-transform: uppercase;
+        }
+        .badge-best { background: var(--accent-soft); border: 1px solid rgba(16, 185, 129, .5); color: var(--accent); }
+        .badge-delta { background: var(--primary-soft); border: 1px solid rgba(59, 130, 246, .4); color: #93c5fd; font-variant-numeric: tabular-nums; }
+        .badge-delta.neg { background: var(--danger-soft); border-color: rgba(248, 113, 113, .4); color: var(--danger); }
+        .d-sub { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem .6rem; margin-top: .45rem; font-size: .72rem; color: var(--text-3); }
+        .d-sub code {
+            font-family: var(--font-mono); font-size: .68rem;
+            color: var(--text-2);
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 6px; padding: .08rem .4rem;
+        }
+        .crumb { display: inline; }
+        .crumb button {
+            background: none; border: none; padding: 0 .15rem;
+            color: var(--text-2); font-family: var(--font-mono); font-size: .68rem;
+            transition: color var(--speed) ease;
+            font-variant-numeric: tabular-nums;
+        }
+        .crumb button:hover { color: var(--primary); }
+        .crumb .sep { color: var(--text-3); font-size: .6rem; }
+
+        .score-rings { display: flex; gap: 1.1rem; }
+        .ring { text-align: center; }
+        .ring-circle {
+            width: 58px; height: 58px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            position: relative;
+        }
+        .ring-circle::before { content: ''; position: absolute; inset: 6px; border-radius: 50%; background: var(--surface); }
+        .ring-circle span { position: relative; font-family: var(--font-mono); font-size: .68rem; font-variant-numeric: tabular-nums; }
+        .ring .ring-label { display: flex; align-items: center; gap: .3rem; justify-content: center; margin-top: .3rem; font-size: .64rem; color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; }
+        .ring .ring-label i { font-size: .6rem; }
+        .ring-main .ring-circle span { font-size: .78rem; color: var(--accent); }
+
+        .tabs { display: flex; gap: .25rem; padding: .5rem 1.25rem 0; border-bottom: 1px solid var(--border-soft); }
+        .tab-btn {
+            background: none; border: none;
+            padding: .5rem .85rem .7rem;
+            color: var(--text-3);
+            font-family: var(--font-body); font-size: .8rem; font-weight: 500;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+            display: inline-flex; align-items: center; gap: .4rem;
+            transition: color var(--speed) ease, border-color var(--speed) ease;
+        }
+        .tab-btn:hover { color: var(--text-2); }
+        .tab-btn.active { color: var(--text); border-bottom-color: var(--primary); }
+        .tab-btn i { font-size: .72rem; }
+        .tab-btn .tab-flag { width: 6px; height: 6px; border-radius: 50%; background: var(--surf); }
+
+        #tabContent { padding: 1.1rem 1.25rem 1.25rem; }
+
+        /* Code panes */
+        .code-window {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            background: #16161a;
+            margin-bottom: .9rem;
+        }
+        .cw-head {
+            display: flex; align-items: center; gap: .5rem;
+            background: var(--surface-2);
+            border-bottom: 1px solid var(--border-soft);
+            padding: .5rem .8rem;
+        }
+        .dot { width: 11px; height: 11px; border-radius: 50%; flex: 0 0 auto; }
+        .dot.red { background: #ff5f56; } .dot.yellow { background: #ffbd2e; } .dot.green { background: #27c93f; }
+        .cw-name { margin-left: .5rem; font-family: var(--font-mono); font-size: .7rem; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cw-tools { margin-left: auto; display: flex; gap: .35rem; align-items: center; }
+
+        .code-scroll { max-height: 480px; overflow: auto; }
+        pre.code {
+            font-family: var(--font-mono);
+            font-size: .76rem;
+            line-height: 1.55;
+            color: #d4d4d4;
+            padding: .8rem 0 .8rem 0;
+            counter-reset: ln;
+            tab-size: 2;
+        }
+        pre.code .cl { display: block; padding: 0 1rem 0 0; white-space: pre; }
+        pre.code .cl::before {
+            counter-increment: ln;
+            content: counter(ln);
+            display: inline-block;
+            width: 3.2em;
+            padding-right: 1em;
+            text-align: right;
+            color: #494f56;
+            user-select: none;
+        }
+        .code-empty { padding: 1.25rem; }
+
+        /* Diff */
+        .diff-note { font-size: .72rem; color: var(--text-3); margin: .2rem 0 .7rem; }
+        .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+        .seg button {
+            background: transparent; border: none;
+            padding: .3rem .7rem;
+            color: var(--text-3); font-size: .7rem; font-weight: 500;
+            transition: all var(--speed) ease;
+        }
+        .seg button + button { border-left: 1px solid var(--border); }
+        .seg button.active { background: var(--primary-soft); color: var(--text); }
+        .seg button:disabled { opacity: .35; cursor: not-allowed; }
+
+        pre.diff { font-family: var(--font-mono); font-size: .74rem; line-height: 1.6; }
+        pre.diff .dl { display: block; padding: 0 .9rem; white-space: pre-wrap; word-break: break-word; }
+        pre.diff .dl.add { background: rgba(16, 185, 129, .08); color: #a7f3d0; }
+        pre.diff .dl.add::before { content: '+ '; color: var(--accent); user-select: none; }
+        pre.diff .dl.del { background: rgba(248, 113, 113, .07); color: #fecaca; }
+        pre.diff .dl.del::before { content: '− '; color: var(--danger); user-select: none; }
+        pre.diff .dl.fold {
+            padding-left: 1.6rem;
+            color: var(--text-3);
+            background: rgba(255, 255, 255, .02);
+            font-style: italic;
+            user-select: none;
+        }
+        pre.diff .dl::before { content: '  '; user-select: none; }
+
+        /* Prompt / feedback */
+        .text-block {
+            font-family: var(--font-mono);
+            font-size: .74rem;
+            line-height: 1.6;
+            color: #cbd5e1;
+            white-space: pre-wrap;
+            word-break: break-word;
+            background: #16161a;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: .9rem 1rem;
+            max-height: 480px;
+            overflow: auto;
         }
 
-        #treeView a:hover {
-            background-color: var(--bg-hover);
+        /* Performance metric cards */
+        .pm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: .8rem; }
+        .pm-card {
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: .85rem .95rem;
+            position: relative;
+            overflow: hidden;
+            transition: border-color var(--speed) ease, transform var(--speed) ease;
+        }
+        .pm-card:hover { transform: translateY(-3px); border-color: var(--primary); }
+        .pm-card::before {
+            content: ''; position: absolute; inset: 0;
+            background: linear-gradient(45deg, rgba(59, 130, 246, .06), transparent 60%);
+            opacity: 0; transition: opacity var(--speed) ease; pointer-events: none;
+        }
+        .pm-card:hover::before { opacity: 1; }
+        .pm-card h4 {
+            display: flex; align-items: center; gap: .45rem;
+            font-size: .68rem; font-weight: 600;
+            text-transform: uppercase; letter-spacing: .07em;
+            color: var(--text-3);
+            margin-bottom: .55rem;
+        }
+        .pm-card h4 i { color: var(--primary); font-size: .78rem; }
+        .pm-card .pm-row { display: flex; justify-content: space-between; gap: .5rem; font-size: .76rem; color: var(--text-2); }
+        .pm-card .pm-row + .pm-row { margin-top: .3rem; }
+        .pm-card .pm-row b { color: var(--text); font-family: var(--font-mono); font-size: .72rem; font-variant-numeric: tabular-nums; }
+        .pm-note { font-size: .72rem; color: var(--text-3); margin-top: .75rem; }
+
+        /* ============ Right rail ============ */
+        .meta-list { display: grid; gap: .55rem; }
+        .meta-row { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; font-size: .78rem; }
+        .meta-row .k { color: var(--text-3); display: inline-flex; align-items: center; gap: .4rem; white-space: nowrap; }
+        .meta-row .k i { font-size: .68rem; color: var(--primary); width: 14px; text-align: center; }
+        .meta-row .v { color: var(--text); font-family: var(--font-mono); font-size: .72rem; text-align: right; word-break: break-word; }
+        .meta-desc { font-size: .78rem; color: var(--text-2); background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: 10px; padding: .6rem .75rem; margin-top: .75rem; }
+
+        /* Benchmark */
+        .bench-block { padding: .1rem 0; }
+        .bench-block + .bench-block { margin-top: .9rem; padding-top: .9rem; border-top: 1px dashed var(--border); }
+        .bench-title { display: flex; align-items: center; gap: .45rem; font-size: .72rem; font-weight: 600; color: var(--text-2); margin-bottom: .5rem; }
+        .bench-title .t-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .t-baseline { background: var(--primary); }
+        .t-winner { background: var(--accent); }
+        .bench-nums { display: flex; gap: 1.2rem; font-size: .76rem; color: var(--text-2); font-variant-numeric: tabular-nums; }
+        .bench-nums b { font-family: var(--font-mono); font-size: .8rem; color: var(--text); font-weight: 500; }
+        .bench-samples { font-family: var(--font-mono); font-size: .64rem; color: var(--text-3); margin-top: .35rem; word-break: break-all; }
+        #benchPlot { margin-top: .4rem; }
+        #benchPlot svg { width: 100%; height: auto; display: block; }
+
+        .artifact-links { display: flex; flex-direction: column; gap: .5rem; }
+        .artifact-links a {
+            display: inline-flex; align-items: center; gap: .55rem;
+            padding: .55rem .75rem;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, .03);
+            font-size: .78rem; font-weight: 500;
+            color: var(--text-2);
+            transition: all var(--speed) ease;
+        }
+        .artifact-links a:hover { border-color: var(--primary); color: var(--text); transform: translateX(2px); }
+        .artifact-links a i { color: var(--primary); }
+
+        /* Statistics */
+        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+        .stat-tile {
+            background: var(--surface-2);
+            border: 1px solid var(--border-soft);
+            border-radius: 12px;
+            padding: .7rem .8rem;
+        }
+        .stat-tile .st-label { display: flex; align-items: center; gap: .4rem; font-size: .62rem; text-transform: uppercase; letter-spacing: .07em; color: var(--text-3); }
+        .stat-tile .st-label i { font-size: .68rem; color: var(--primary); }
+        .stat-tile .st-value { font-family: var(--font-display); font-size: 1.05rem; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: .2rem; }
+        .stat-tile .st-value.pos { color: var(--accent); }
+        .stat-tile .st-sub { font-size: .68rem; color: var(--text-3); }
+        #scoreSpark { margin-top: .8rem; }
+        #scoreSpark svg { width: 100%; height: 44px; display: block; }
+
+        /* Footer */
+        footer {
+            border-top: 1px solid var(--border-soft);
+            margin-top: 2.5rem;
+            padding-top: 1.5rem;
+            text-align: center;
+            color: var(--text-3);
+            font-size: .78rem;
         }
 
-        #treeView a.improved {
-            background-color: rgba(0, 128, 0, 0.3);
-            border-color: #0a0;
+        /* Drag overlay */
+        #dropOverlay {
+            position: fixed; inset: 0; z-index: 100;
+            display: none;
+            align-items: center; justify-content: center;
+            background: rgba(10, 10, 12, .8);
+            backdrop-filter: blur(6px);
         }
+        #dropOverlay.show { display: flex; }
+        #dropOverlay .drop-box {
+            border: 2px dashed var(--primary);
+            border-radius: 24px;
+            padding: 3rem 4rem;
+            text-align: center;
+            background: rgba(59, 130, 246, .06);
+            color: var(--text);
+        }
+        #dropOverlay .drop-box i { font-size: 2.4rem; background: linear-gradient(135deg, var(--primary), var(--accent)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: .75rem; }
+        #dropOverlay .drop-box p { color: var(--text-2); font-size: .85rem; margin-top: .4rem; }
 
-        #treeView a.degraded {
-            background-color: rgba(128, 0, 0, 0.3);
-            border-color: #a00;
+        /* ============ Responsive ============ */
+        @media (max-width: 1280px) {
+            .layout { grid-template-columns: 300px minmax(0, 1fr); }
+            .rail-right { grid-column: 1 / -1; position: static; max-height: none; flex-direction: row; flex-wrap: wrap; }
+            .rail-right .card { flex: 1 1 300px; }
         }
-
-        #treeView a.best {
-            background-color: rgba(0, 200, 0, 0.4);
-            border-color: var(--accent-color);
+        @media (max-width: 860px) {
+            .layout { grid-template-columns: 1fr; }
+            .rail-left { position: static; max-height: none; }
+            .nav-meta { display: none; }
+            .score-rings { gap: .6rem; }
+            .ring-circle { width: 48px; height: 48px; }
         }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation: none !important; transition: none !important; }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1><i class="fas fa-chart-line"></i> AlphaRevolve Run Explorer</h1>
-            <label for="fileInput">Select a run JSON and, optionally, its matching patch and report</label>
-            <input type="file" id="fileInput" accept=".json,.patch,.md" multiple title="Select run JSON and matching artifacts">
-        </header>
+    <div class="bg-glow bg-glow-1"></div>
+    <div class="bg-glow bg-glow-2"></div>
 
-        <main class="main-content">
-            <section class="primary-section">
-                <div id="treeContainer" class="card">
-                    <h2><i class="fas fa-sitemap"></i> Program Evolution Tree</h2>
-                    <div id="treeView" aria-label="Program evolution visualization">
-                        <!-- Tree will be rendered here -->
-                        <p class="placeholder">Load a run file to view the evolution tree.</p>
+    <nav>
+        <a href="#" class="logo">
+            <svg viewBox="0 0 24 24"><defs>
+                <linearGradient id="logoGrad" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stop-color="#3b82f6"/><stop offset="1" stop-color="#10b981"/>
+                </linearGradient>
+            </defs>
+            <path fill="url(#logoGrad)" d="M12 2L2 7l10 5 10-5-10-5zm0 9l2.5-1.25L12 8.5l-2.5 1.25L12 11zm0 2.5l-5-2.5-5 2.5L12 22l10-8.5-5-2.5-5 2.5z"/>
+            </svg>
+            <span class="wordmark"><b>Alpha</b>Revolve</span>
+            <span class="chip" style="margin-left:.35rem">Run Explorer</span>
+        </a>
+        <div class="nav-meta" id="navMeta" aria-live="polite">
+            <span id="navLoadedHint">No run loaded — drop files or press Load</span>
+        </div>
+        <div class="card-tools">
+            <input type="file" id="fileInput" accept=".json,.patch,.md" multiple hidden>
+            <button class="btn btn-primary" id="loadBtn"><i class="fas fa-folder-open"></i> Load run</button>
+        </div>
+    </nav>
+
+    <main class="page">
+        <!-- ======== Hero: welcome state ======== -->
+        <section class="hero-welcome" id="heroWelcome">
+            <svg class="evo-motif" viewBox="0 0 400 120" fill="none" aria-hidden="true">
+                <line x1="55" y1="60" x2="115" y2="25" stroke="#27272a" stroke-width="2"/>
+                <line x1="55" y1="60" x2="115" y2="80" stroke="#27272a" stroke-width="2"/>
+                <line x1="125" y1="25" x2="195" y2="15" stroke="#27272a" stroke-width="2"/>
+                <line x1="125" y1="25" x2="195" y2="45" stroke="#27272a" stroke-width="2"/>
+                <line x1="125" y1="80" x2="195" y2="70" stroke="#27272a" stroke-width="2"/>
+                <circle cx="50" cy="60" r="9" fill="#3b82f6" opacity=".45"/>
+                <circle cx="120" cy="25" r="11" fill="#3b82f6" opacity=".65"/>
+                <circle cx="120" cy="80" r="7" fill="#3b82f6" opacity=".3"/>
+                <circle cx="200" cy="15" r="12" fill="#3b82f6" opacity=".8"/>
+                <circle cx="200" cy="45" r="12" fill="#3b82f6" opacity=".55"/>
+                <circle cx="200" cy="70" r="12" fill="#3b82f6" opacity=".6"/>
+                <line x1="212" y1="15" x2="290" y2="15" stroke="#27272a" stroke-width="2"/>
+                <circle cx="305" cy="15" r="18" fill="#10b981" filter="drop-shadow(0 0 10px rgba(16,185,129,.5))"/>
+                <text x="296" y="19" fill="#fff" font-family="sans-serif" font-size="9" font-weight="bold">BEST</text>
+            </svg>
+            <h1>Explore the <span class="text-gradient">Evolution</span> of Your Programs</h1>
+            <p class="sub">Load an AlphaRevolve run snapshot to inspect its lineage tree, fitness landscape, benchmark evidence, prompts, feedback, and metrics.</p>
+            <button class="btn btn-primary" id="loadBtn2" style="font-size:1rem; padding:.9rem 2.2rem;"><i class="fas fa-dna"></i> Select a run JSON</button>
+            <p class="drop-hint">…or drag &amp; drop files here. Add the matching <kbd>.patch</kbd> and <kbd>.report.md</kbd> to link artifacts.</p>
+        </section>
+
+        <!-- ======== Hero: stats strip (filled on load) ======== -->
+        <section class="hero-stats" id="heroStats" hidden></section>
+
+        <div class="error-banner" id="errorBanner" role="alert">
+            <i class="fas fa-exclamation-triangle"></i>
+            <span id="errorText"></span>
+        </div>
+
+        <!-- ======== Dashboard ======== -->
+        <section class="layout" id="dashboard" hidden>
+            <!-- Left rail -->
+            <aside class="rail-left">
+                <div class="card" id="treeCard">
+                    <div class="card-head">
+                        <h2><i class="fas fa-sitemap"></i> Evolution Tree</h2>
+                        <div class="card-tools">
+                            <button class="icon-btn" id="collapseAll" title="Collapse all branches" aria-label="Collapse all branches"><i class="fas fa-compress"></i></button>
+                            <button class="icon-btn" id="expandAll" title="Expand all branches" aria-label="Expand all branches"><i class="fas fa-expand"></i></button>
+                        </div>
                     </div>
+                    <div class="tree-legend" aria-hidden="true">
+                        <span><span class="legend-dot best"></span>Best</span>
+                        <span><span class="legend-dot improved"></span>Improved</span>
+                        <span><span class="legend-dot degraded"></span>Degraded</span>
+                        <span><span class="legend-dot neutral"></span>Neutral</span>
+                    </div>
+                    <div id="treeView" tabindex="0" role="tree" aria-label="Program evolution tree"></div>
                 </div>
 
-                <div id="programDetails" class="card">
-                    <h2><i class="fas fa-file-code"></i> Program Details</h2>
-                    <div id="programDetailsContent">
-                        <p>Select a program from the tree to view details.</p>
+                <div class="card">
+                    <div class="card-head">
+                        <h2><i class="fas fa-list-check"></i> Programs</h2>
+                        <button class="icon-btn" id="sortToggle" title="Toggle sort (iteration / score)" aria-label="Toggle sort order" data-mode="iteration"><i class="fas fa-arrow-down-1-9"></i></button>
                     </div>
+                    <div class="card-body" style="padding:.7rem 1.1rem .75rem">
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="listSearch" placeholder="Filter by iteration or ID…" aria-label="Filter programs">
+                        </div>
+                    </div>
+                    <div class="filter-chips" id="filterChips">
+                        <button class="fchip active" data-filter="all">All <span class="count"></span></button>
+                        <button class="fchip" data-filter="improved">Improved <span class="count"></span></button>
+                        <button class="fchip" data-filter="degraded">Degraded <span class="count"></span></button>
+                        <button class="fchip" data-filter="best">Best <span class="count"></span></button>
+                    </div>
+                    <ul id="programList" role="listbox" aria-label="Programs in run"></ul>
+                </div>
+            </aside>
+
+            <!-- Center column -->
+            <section class="col-center">
+                <div class="card">
+                    <div class="card-head">
+                        <h2><i class="fas fa-chart-column"></i> Fitness Landscape</h2>
+                        <span class="chip" id="chartMeta"></span>
+                    </div>
+                    <div id="chartBox"></div>
+                </div>
+
+                <div class="card" id="detailCard">
+                    <div class="d-head" id="detailHead"></div>
+                    <div class="tabs" id="detailTabs">
+                        <button class="tab-btn active" data-tab="code"><i class="fas fa-code"></i> Code</button>
+                        <button class="tab-btn" data-tab="prompt"><i class="fas fa-terminal"></i> Prompt</button>
+                        <button class="tab-btn" data-tab="feedback"><i class="fas fa-comment-dots"></i> Feedback</button>
+                        <button class="tab-btn" data-tab="metrics"><i class="fas fa-gauge-high"></i> Metrics</button>
+                    </div>
+                    <div id="tabContent"></div>
                 </div>
             </section>
 
-            <aside class="secondary-section">
-                <div id="metadata" class="card">
-                    <h2><i class="fas fa-info-circle"></i> Run Metadata</h2>
-                    <div id="metadataContent">
-                        <p class="placeholder">Load a run file to view metadata.</p>
+            <!-- Right rail -->
+            <aside class="rail-right">
+                <div class="card">
+                    <div class="card-head"><h2><i class="fas fa-circle-info"></i> Run Metadata</h2></div>
+                    <div class="card-body" id="metadataContent"></div>
+                </div>
+
+                <div class="card">
+                    <div class="card-head"><h2><i class="fas fa-stopwatch"></i> Benchmark Evidence</h2></div>
+                    <div class="card-body">
+                        <div id="benchPlot"></div>
+                        <div id="benchmarkContent"></div>
                     </div>
                 </div>
 
-                <div id="runEvidence" class="card">
-                    <h2><i class="fas fa-stopwatch"></i> Benchmark Evidence</h2>
-                    <div id="benchmarkContent"><p class="placeholder">Load a manifest-backed run to compare baseline and winner samples.</p></div>
-                    <div id="artifactContent" aria-live="polite"><p class="placeholder">Select the matching .patch and .report.md files with the run JSON to link them here.</p></div>
+                <div class="card">
+                    <div class="card-head"><h2><i class="fas fa-file-shield"></i> Artifacts</h2></div>
+                    <div class="card-body" id="artifactContent" aria-live="polite"></div>
                 </div>
 
-                <div id="statistics" class="card">
-                    <h2><i class="fas fa-chart-bar"></i> Run Statistics</h2>
-                    <div id="statisticsContent">
-                        <p class="placeholder">Load a run file to view statistics.</p>
-                    </div>
-                </div>
-
-                <div class="program-list-container card">
-                    <h2><i class="fas fa-code"></i> Programs List</h2>
-                    <ul id="programList" aria-label="List of all programs in run">
-                        <!-- Programs list will be rendered here -->
-                    </ul>
+                <div class="card">
+                    <div class="card-head"><h2><i class="fas fa-chart-pie"></i> Run Statistics</h2></div>
+                    <div class="card-body" id="statisticsContent"></div>
                 </div>
             </aside>
-        </main>
+        </section>
 
         <footer>
-            <p class="text-center text-muted">AlphaRevolve Run Explorer - Visualize Program Evolution</p>
+            <p>AlphaRevolve Run Explorer — visualize program evolution. Load <code style="font-family:var(--font-mono);font-size:.7rem">runs/&lt;runId&gt;.json</code> from a completed optimization.</p>
         </footer>
+    </main>
+
+    <div id="dropOverlay" aria-hidden="true">
+        <div class="drop-box">
+            <i class="fas fa-cloud-arrow-down"></i>
+            <h3>Drop your run files</h3>
+            <p>Run JSON first; optionally its <b>.patch</b> and <b>.report.md</b></p>
+        </div>
     </div>
 
     <script>
         /**
-         * AlphaRevolve Run Explorer
-         * Script for visualizing and exploring evolutionary program runs
+         * AlphaRevolve Run Explorer 2.0
+         * Self-contained visualization for run snapshots (runs/<runId>.json).
+         * No framework, no build step — plain ES2019+ browser JS.
          */
-        (function() {
-            function escapeHtml(value) {
-                return String(value).replace(/[&<>"']/g, character => ({
+        (function () {
+            'use strict';
+
+            /* ============================== Helpers ============================== */
+
+            const $ = (sel, root) => (root || document).querySelector(sel);
+            const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
+
+            function esc(value) {
+                return String(value ?? '').replace(/[&<>"']/g, c => ({
                     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-                })[character]);
+                })[c]);
             }
 
-            // Application state
-            const app = {
-                programMapping: {}, // Map of program IDs to program objects
-                bestProgram: null,  // Reference to the best program in the run
-                currentProgram: null, // Currently selected program
-                artifactUrls: []
+            const fmt = {
+                score: (v, d = 4) => Number.isFinite(v) ? v.toFixed(d) : '—',
+                raw: v => Number.isFinite(v) ? v.toFixed(2) : 'N/A',
+                mb: bytes => Number.isFinite(bytes) && bytes ? (bytes / 1048576).toFixed(2) + ' MB' : 'N/A',
+                ms: v => Number.isFinite(v) ? v.toFixed(2) + ' ms' : 'N/A',
+                int: v => Number.isFinite(v) ? String(Math.round(v)) : 'N/A',
+                runtime: ms => {
+                    if (!Number.isFinite(ms)) return 'N/A';
+                    if (ms < 1000) return Math.round(ms) + ' ms';
+                    const s = ms / 1000;
+                    if (s < 60) return s.toFixed(1) + ' s';
+                    return Math.floor(s / 60) + 'm ' + Math.round(s % 60) + 's';
+                },
+                date: iso => {
+                    const d = new Date(iso);
+                    return isNaN(d) ? String(iso ?? '—')
+                        : d.toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                },
+                pct: v => {
+                    if (!Number.isFinite(v)) return '—';
+                    const s = v >= 0 ? '+' : '−';
+                    return s + Math.abs(v).toFixed(1) + '%';
+                },
+                shortId: id => typeof id === 'string' && id.length > 8 ? id.slice(0, 8) + '…' : id
             };
 
-            // Initialize the application
-            function init() {
-                document.getElementById('fileInput').addEventListener('change', loadFile);
+            function copyText(text, btn) {
+                const done = () => {
+                    if (!btn) return;
+                    btn.classList.add('ok');
+                    btn.innerHTML = '<i class="fas fa-check"></i> Copied';
+                    setTimeout(() => {
+                        btn.classList.remove('ok');
+                        btn.innerHTML = btn.dataset.orig || btn.innerHTML;
+                    }, 1400);
+                };
+                if (navigator.clipboard?.writeText) {
+                    navigator.clipboard.writeText(text).then(done).catch(() => fallback());
+                } else fallback();
+
+                function fallback() {
+                    const ta = document.createElement('textarea');
+                    ta.value = text;
+                    ta.style.cssText = 'position:fixed;opacity:0';
+                    document.body.appendChild(ta);
+                    ta.select();
+                    try { document.execCommand('copy'); done(); } catch (e) { /* noop */ }
+                    ta.remove();
+                }
             }
 
-            /**
-             * Load and parse a JSON file
-             */
-            function loadFile(event) {
-                const files = Array.from(event.target.files || []);
-                const file = files.find(candidate => candidate.name.toLowerCase().endsWith('.json'));
-                if (!file) {
-                    alert('Select a run .json file. You can also select its matching .patch and .report.md files.');
+            /* ============================== State ============================== */
+
+            const state = {
+                data: null,
+                programs: [],        // normalized, ordered by iteration then arrival
+                byId: {},
+                best: null,
+                baseline: null,
+                selectedId: null,
+                artifactUrls: [],
+                treeCollapsed: new Set(),
+                listFilter: 'all',
+                listSearch: '',
+                listSort: 'iteration',   // 'iteration' | 'score'
+                activeTab: 'code',
+                codeView: 'code',        // 'code' | 'diff'
+                currentProgram: null
+            };
+
+            const STATUS_ICONS = {
+                best: '<i class="fas fa-trophy"></i>',
+                up: '<i class="fas fa-arrow-up"></i>',
+                down: '<i class="fas fa-arrow-down"></i>',
+                none: ''
+            };
+
+            /* ============================== Empty / error states ============================== */
+
+            function showError(message) {
+                $('#errorText').textContent = message;
+                $('#errorBanner').classList.add('show');
+            }
+            function clearError() {
+                $('#errorBanner').classList.remove('show');
+            }
+
+            function showLoadedLayout(loaded) {
+                $('#dashboard').hidden = !loaded;
+                $('#heroStats').hidden = !loaded;
+                $('#heroWelcome').hidden = loaded;
+            }
+
+            /* ============================== File loading ============================== */
+
+            $('#loadBtn').addEventListener('click', () => $('#fileInput').click());
+            $('#loadBtn2').addEventListener('click', () => $('#fileInput').click());
+            $('#fileInput').addEventListener('change', e => {
+                loadRunFiles(Array.from(e.target.files || []));
+                e.target.value = '';
+            });
+
+            function loadRunFiles(files) {
+                if (!files.length) return;
+                const runFile = files.find(f => f.name.toLowerCase().endsWith('.json'));
+                if (!runFile) {
+                    showError('No run JSON selected. Select the snapshot file (for example runs/<runId>.json); its .patch/.report.md artifacts are optional extras.');
                     return;
                 }
-
+                clearError();
                 const reader = new FileReader();
-                reader.onload = function(e) {
+                reader.onload = e => {
                     try {
                         const data = JSON.parse(e.target.result);
-                        processAndDisplayData(data, files, file);
-                    } catch (error) {
-                        alert('Error parsing JSON file.');
-                        console.error('JSON parsing error:', error);
+                        processAndDisplayData(data, files, runFile);
+                    } catch (err) {
+                        console.error('JSON parsing error:', err);
+                        showError(`Could not parse "${runFile.name}": ${err.message}`);
                     }
                 };
-                reader.readAsText(file);
+                reader.onerror = () => showError(`Could not read "${runFile.name}".`);
+                reader.readAsText(runFile);
             }
 
-            /**
-             * Process and display the run data
-             */
-            function processAndDisplayData(data, selectedFiles = [], runFile = null) {
-                if (!data || !Array.isArray(data.programs) || data.programs.length === 0) {
-                    alert('The selected JSON does not contain any saved programs.');
-                    return;
+            /* Drag & drop */
+            let dragDepth = 0;
+            window.addEventListener('dragenter', e => {
+                if (Array.from(e.dataTransfer?.types || []).includes('Files')) {
+                    dragDepth++;
+                    $('#dropOverlay').classList.add('show');
                 }
-                app.artifactUrls.forEach(url => URL.revokeObjectURL(url));
-                app.artifactUrls = [];
-                console.log(`Processing run with ${data.programs.length} programs`);
+            });
+            window.addEventListener('dragleave', () => {
+                dragDepth = Math.max(0, dragDepth - 1);
+                if (!dragDepth) $('#dropOverlay').classList.remove('show');
+            });
+            window.addEventListener('dragover', e => e.preventDefault());
+            window.addEventListener('drop', e => {
+                e.preventDefault();
+                dragDepth = 0;
+                $('#dropOverlay').classList.remove('show');
+                loadRunFiles(Array.from(e.dataTransfer?.files || []));
+            });
 
-                // Process programs (normalize IDs and calculate improvements)
-                processPrograms(data.programs);
+            /* ============================== Data normalization ============================== */
 
-                // Find the best program
-                app.bestProgram = findBestProgram(data.programs);
-
-                // Display all sections
-                displayMetadata(data);
-                displayBenchmarkEvidence(data);
-                displayRunArtifacts(data, selectedFiles, runFile);
-                displayPrograms(data.programs);
-                displayStatistics(data);
-
-                // Build and display the evolution tree
-                const treeHTML = buildEvolutionTree(data.programs);
-                document.getElementById('treeView').innerHTML = treeHTML;
-            }
-
-            /**
-             * Process programs to normalize IDs and calculate improvement metrics
-             */
-            function processPrograms(programs) {
-                // Reset program mapping
-                app.programMapping = {};
-
-                // Normalize program IDs and calculate improvements
-                programs.forEach(program => {
-                    // Normalize IDs
-                    program.id = normalizeId(program.id);
-                    if (program.parent) {
-                        program.parent = normalizeId(program.parent);
-                    }
-
-                    // Add to mapping
-                    app.programMapping[program.id] = program;
-                });
-
-                // Calculate improvement scores in a second pass
-                programs.forEach(program => {
-                    if (program.parent && app.programMapping[program.parent]) {
-                        const parent = app.programMapping[program.parent];
-                        const scoreDiff = program.fitness.finalScore - parent.fitness.finalScore;
-                        program.improved = scoreDiff > 0;
-                        program.degraded = scoreDiff < 0;
-                    } else {
-                        program.improved = false;
-                        program.degraded = false;
-                    }
-                });
-            }
-
-            /**
-             * Normalize an ID by trimming whitespace and removing quotes
-             */
             function normalizeId(id) {
                 return String(id).trim().replace(/['"]/g, '');
             }
 
-            /**
-             * Find the program with the highest fitness score
-             */
-            function findBestProgram(programs) {
-                return programs.reduce((best, current) =>
-                    current.fitness.finalScore > best.fitness.finalScore ? current : best, programs[0]);
+            function processPrograms(programs) {
+                state.programs = [];
+                state.byId = {};
+
+                programs.forEach(program => {
+                    program.id = normalizeId(program.id);
+                    if (program.parent) program.parent = normalizeId(program.parent);
+                    state.byId[program.id] = program;
+                    state.programs.push(program);
+                });
+
+                // Improvement flags relative to the direct parent.
+                state.programs.forEach(program => {
+                    let pct = null;
+                    if (program.parent && state.byId[program.parent]) {
+                        const parentScore = state.byId[program.parent].fitness?.finalScore;
+                        const score = program.fitness?.finalScore;
+                        if (Number.isFinite(score) && Number.isFinite(parentScore) && parentScore !== 0) {
+                            pct = (score - parentScore) / Math.abs(parentScore) * 100;
+                        }
+                    }
+                    program.deltaPct = pct;
+                    program.improved = pct !== null && pct > 0;
+                    program.degraded = pct !== null && pct < 0;
+                });
             }
 
-            /**
-             * Display a program from the tree or list
-             */
-            function displayProgram(id) {
-                const program = app.programMapping[id];
-                if (program) {
-                    app.currentProgram = program;
-                    renderProgramDetails(program);
-                    document.getElementById('programDetails').scrollIntoView();
-                } else {
-                    console.warn(`Program not found for id: ${id}`);
-                }
+            function pickBaseline() {
+                const byIteration = p => (p.iteration ?? 0) === 0;
+                state.baseline = state.programs.find(byIteration) || state.programs[0];
             }
 
-            /**
-             * Display metadata about the run
-             */
-            function displayMetadata(data) {
-                const metadataContent = document.getElementById('metadataContent');
-                metadataContent.innerHTML = `
-                    <p><i class="fas fa-tag"></i> <strong>Version:</strong> ${data.version}</p>
-                    <p><i class="fas fa-clock"></i> <strong>Timestamp:</strong> ${data.timestamp}</p>
-                    <p><i class="fas fa-book"></i> <strong>Problem Description:</strong> ${data.metadata?.problemDescription || 'N/A'}</p>
-                    <p><i class="fas fa-cog"></i> <strong>Iterations:</strong> ${data.metadata?.config?.iterations || 'N/A'}</p>
-                    <p><i class="fas fa-robot"></i> <strong>LLM Model:</strong> ${data.metadata?.config?.llmModel || 'N/A'}</p>
-                    <p><i class="fas fa-comment"></i> <strong>Feedback Enabled:</strong> ${data.metadata?.config?.feedbackEnabled || 'N/A'}</p>
-                    <p><i class="fas fa-brain"></i> <strong>Feedback LLM Model:</strong> ${data.metadata?.config?.feedbackLlmModel || 'N/A'}</p>
-                    <p><i class="fas fa-stopwatch"></i> <strong>Runtime:</strong> ${data.metadata?.runtime || 'N/A'} ms</p>
-                `;
+            function pickBest() {
+                let best = state.programs.reduce((acc, cur) =>
+                    (cur.fitness?.finalScore ?? -Infinity) > (acc.fitness?.finalScore ?? -Infinity) ? cur : acc,
+                    state.programs[0]);
+                // Trust metadata.bestProgramId when it agrees on a max score.
+                const metaBest = state.data.metadata?.bestProgramId != null ? state.byId[String(state.data.metadata.bestProgramId)] : null;
+                if (metaBest && (metaBest.fitness?.finalScore === best.fitness?.finalScore)) best = metaBest;
+                state.best = best;
             }
 
-            function displayBenchmarkEvidence(data) {
-                const baseline = data.programs.find(candidate => candidate.iteration === 0);
-                const winner = app.bestProgram;
-                const metricsFor = candidate => candidate?.fitness?.performanceMetrics?.benchmark;
-                const baselineMetrics = metricsFor(baseline);
-                const winnerMetrics = metricsFor(winner);
-                const content = document.getElementById('benchmarkContent');
-                if (!baselineMetrics && !winnerMetrics) {
-                    content.innerHTML = '<p class="placeholder">This run has no benchmark samples.</p>';
+            function statusOf(program) {
+                if (state.best && program.id === state.best.id) return 'best';
+                if (program.improved) return 'up';
+                if (program.degraded) return 'down';
+                return 'none';
+            }
+
+            /* ============================== Top-level render ============================== */
+
+            function processAndDisplayData(data, selectedFiles = [], runFile = null) {
+                if (!data || !Array.isArray(data.programs) || data.programs.length === 0) {
+                    showError('This JSON contains no saved programs. Select a run snapshot file under runs/<runId>.json.');
                     return;
                 }
-                const show = metrics => {
-                    if (!metrics) return '<span>Not recorded</span>';
-                    const samples = Array.isArray(metrics.samplesMs)
-                        ? metrics.samplesMs.map(sample => Number(sample).toFixed(3)).join(', ')
-                        : 'Not recorded';
-                    const median = Number.isFinite(metrics.medianMs) ? `${metrics.medianMs.toFixed(3)} ms` : 'n/a';
-                    const mad = Number.isFinite(metrics.madMs) ? `${metrics.madMs.toFixed(3)} ms` : 'n/a';
-                    return `<div><strong>Median:</strong> ${median} &nbsp; <strong>MAD:</strong> ${mad}</div><div><strong>Samples (ms):</strong> ${samples}</div>`;
-                };
-                content.innerHTML = `
-                    <div style="display:grid;gap:12px">
-                        <div><strong>Baseline</strong><br>${show(baselineMetrics)}</div>
-                        <div><strong>Winner (iteration ${winner?.iteration ?? 'n/a'})</strong><br>${show(winnerMetrics)}</div>
+                state.artifactUrls.forEach(u => URL.revokeObjectURL(u));
+                state.artifactUrls = [];
+                state.data = data;
+                state.treeCollapsed = new Set();
+                state.activeTab = 'code';
+                state.codeView = 'code';
+
+                processPrograms(data.programs);
+                pickBaseline();
+                pickBest();
+                state.selectedId = state.best.id;
+                state.currentProgram = state.best;
+
+                clearError();
+                showLoadedLayout(true);
+                renderNavMeta(data, runFile);
+                renderHero(data);
+                renderTree();
+                renderList();
+                renderChart();
+                renderDetails();
+                renderMetadata(data);
+                renderBenchmark(data);
+                renderArtifacts(data, selectedFiles, runFile);
+                renderStatistics(data);
+            }
+
+            function renderNavMeta(data, runFile) {
+                const meta = data.metadata || {};
+                const cfg = meta.config || {};
+                const model = cfg.llmModel || 'unknown model';
+                const runId = meta.runId || (runFile ? runFile.name.replace(/\.json$/i, '') : null);
+                $('#navLoadedHint').style.display = 'none';
+                $('#navMeta').innerHTML =
+                    `<span class="chip"><i class="fas fa-robot"></i><span class="chip-model" title="${esc(model)}">${esc(model)}</span></span>` +
+                    (runId ? `<span class="chip chip-accent"><i class="fas fa-tag"></i><span title="${esc(runId)}">${esc(String(runId).slice(0, 26))}</span></span>` : '');
+            }
+
+            /* ============================== Hero stats strip ============================== */
+
+            function renderHero(data) {
+                const cfg = data.metadata?.config || {};
+                const metrics = state.best?.fitness?.performanceMetrics || {};
+                let basePct = null;
+                if (state.baseline && state.best && state.baseline.id !== state.best.id) {
+                    const b = state.baseline.fitness?.finalScore;
+                    const w = state.best.fitness?.finalScore;
+                    if (Number.isFinite(b) && Number.isFinite(w) && b !== 0) basePct = (w - b) / Math.abs(b) * 100;
+                }
+                const pctCls = basePct === null ? '' : (basePct >= 0 ? 'pos' : 'neg');
+
+                $('#heroStats').hidden = false;
+                $('#heroStats').innerHTML = `
+                    <div class="hero-stat">
+                        <span class="label"><i class="fas fa-trophy"></i> Winner score</span>
+                        <div class="value">${fmt.score(state.best?.fitness?.finalScore)}</div>
+                        <div class="detail">iter ${esc(state.best?.iteration ?? '—')} · quality ${fmt.score(state.best?.fitness?.qualityScore, 2)} · eff ${fmt.score(state.best?.fitness?.efficiencyScore, 2)}</div>
+                    </div>
+                    <div class="hero-stat">
+                        <span class="label"><i class="fas fa-arrow-trend-up"></i> vs baseline</span>
+                        <div class="value ${pctCls}">${basePct === null ? '—' : fmt.pct(basePct)}</div>
+                        <div class="detail">final score change from iteration 0</div>
+                    </div>
+                    <div class="hero-stat">
+                        <span class="label"><i class="fas fa-layer-group"></i> Programs</span>
+                        <div class="value">${state.programs.length}<span class="unit">/ ${esc(cfg.iterations ?? '—')} iters</span></div>
+                        <div class="detail">${state.programs.filter(p => p.improved).length} improved · ${state.programs.filter(p => p.degraded).length} degraded</div>
+                    </div>
+                    <div class="hero-stat">
+                        <span class="label"><i class="fas fa-stopwatch"></i> Runtime</span>
+                        <div class="value">${esc(fmt.runtime(data.metadata?.runtime))}</div>
+                        <div class="detail">ended ${esc(fmt.date(data.metadata?.endTime || data.timestamp))}</div>
+                    </div>
+                    <div class="hero-stat">
+                        <span class="label"><i class="fas fa-signal"></i> Winner exec time</span>
+                        <div class="value">${esc(fmt.ms(metrics.executionTime).replace(' ms', ''))}<span class="unit">ms</span></div>
+                        <div class="detail">heap ${esc(fmt.mb(metrics.memoryUsage?.delta?.heapUsed))} · GC ×${esc(fmt.int(metrics.gcStats?.count))}</div>
                     </div>`;
             }
 
-            function displayRunArtifacts(data, selectedFiles, runFile) {
-                const content = document.getElementById('artifactContent');
-                const runId = data.metadata?.runId || runFile?.name.replace(/\.json$/i, '');
-                if (!runId) {
-                    content.innerHTML = '<p class="placeholder">This run has no run ID for matching artifacts.</p>';
+            /* ============================== Evolution tree ============================== */
+
+            function buildChildrenMap() {
+                const map = {};
+                state.programs.forEach(program => {
+                    const key = (program.parent && state.byId[program.parent]) ? program.parent : null;
+                    (map[key] || (map[key] = [])).push(program);
+                });
+                Object.values(map).forEach(children =>
+                    children.sort((a, b) => (a.iteration ?? 0) - (b.iteration ?? 0) || String(a.id).localeCompare(b.id)));
+                return map;
+            }
+
+            function renderTree() {
+                const view = $('#treeView');
+                const childrenMap = buildChildrenMap();
+                const roots = childrenMap[null] || [];
+
+                const renderNodes = (nodes, depth) => nodes.map(node => {
+                    const children = childrenMap[node.id] || [];
+                    const collapsed = state.treeCollapsed.has(node.id);
+                    const status = statusOf(node);
+                    const selected = node.id === state.selectedId;
+                    const pillCls = status + (selected ? ' selected' : '');
+                    const delta = node.deltaPct;
+                    const title = `iter ${node.iteration} · id ${node.id}` +
+                        (delta !== null ? ` · ${delta >= 0 ? '+' : '−'}${Math.abs(delta).toFixed(1)}% vs parent` : '');
+
+                    const caret = `<button class="tn-caret${collapsed ? '' : ' opened'}" data-node="${esc(node.id)}"
+                        ${children.length ? '' : 'disabled'}
+                        aria-label="${collapsed ? 'Expand' : 'Collapse'} branch of iteration ${esc(node.iteration)}"
+                        title="${collapsed ? 'Expand' : 'Collapse'}"><i class="fas fa-chevron-down"></i></button>`;
+
+                    return `<li>
+                        <div class="tn-row">${caret}
+                            <span class="tn-pill ${pillCls}" data-pid="${esc(node.id)}" role="treeitem" aria-selected="${selected}" tabindex="0" title="${esc(title)}">
+                                <span class="tn-iter">Iter ${esc(node.iteration)} ${STATUS_ICONS[status]}</span>
+                                <span class="tn-score">${fmt.score(node.fitness?.finalScore, 2)}${delta !== null ? ` · ${delta >= 0 ? '▲' : '▼'}${Math.abs(delta).toFixed(0)}%` : ''}</span>
+                            </span>
+                        </div>
+                        ${children.length ? `<ul${collapsed ? ' style="display:none"' : ''}>${renderNodes(children, depth + 1)}</ul>` : ''}
+                    </li>`;
+                }).join('');
+
+                view.innerHTML = roots.length
+                    ? `<ul>${renderNodes(roots, 0)}</ul>`
+                    : '<div class="placeholder"><i class="fas fa-sitemap"></i>No lineage structure found in this run.</div>';
+            }
+
+            $('#treeView').addEventListener('click', e => {
+                const caret = e.target.closest('.tn-caret:not(:disabled)');
+                if (caret) {
+                    const nodeId = caret.dataset.node;
+                    state.treeCollapsed.has(nodeId) ? state.treeCollapsed.delete(nodeId) : state.treeCollapsed.add(nodeId);
+                    renderTree();
                     return;
                 }
-                const patch = selectedFiles.find(file => file.name === `${runId}.patch`);
-                const report = selectedFiles.find(file => file.name === `${runId}.report.md`);
+                const pill = e.target.closest('.tn-pill');
+                if (pill) selectProgram(pill.dataset.pid);
+            });
+            $('#treeView').addEventListener('keydown', e => {
+                if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('tn-pill')) {
+                    e.preventDefault();
+                    selectProgram(e.target.dataset.pid);
+                }
+            });
+            $('#collapseAll').addEventListener('click', () => {
+                state.treeCollapsed = new Set(state.programs.filter(p => state.byId[p.parent]).map(p => p.id));
+                renderTree();
+            });
+            $('#expandAll').addEventListener('click', () => {
+                state.treeCollapsed = new Set();
+                renderTree();
+            });
+
+            /* ============================== Program list ============================== */
+
+            function filteredPrograms() {
+                let list = state.programs.slice();
+                if (state.listFilter === 'improved') list = list.filter(p => p.improved);
+                else if (state.listFilter === 'degraded') list = list.filter(p => p.degraded);
+                else if (state.listFilter === 'best') list = state.best ? [state.best] : list;
+                const q = state.listSearch.trim().toLowerCase();
+                if (q) list = list.filter(p => String(p.iteration).includes(q) || String(p.id).toLowerCase().includes(q));
+                if (state.listSort === 'score') list.sort((a, b) => (b.fitness?.finalScore ?? -Infinity) - (a.fitness?.finalScore ?? -Infinity));
+                else list.sort((a, b) => (a.iteration ?? 0) - (b.iteration ?? 0));
+                return list;
+            }
+
+            function renderList() {
+                const counts = {
+                    all: state.programs.length,
+                    improved: state.programs.filter(p => p.improved).length,
+                    degraded: state.programs.filter(p => p.degraded).length,
+                    best: state.best ? 1 : 0
+                };
+                $$('#filterChips .fchip').forEach(chip => {
+                    $('.count', chip).textContent = `(${counts[chip.dataset.filter] ?? 0})`;
+                    chip.classList.toggle('active', chip.dataset.filter === state.listFilter);
+                });
+                $('#sortToggle').innerHTML = state.listSort === 'score'
+                    ? '<i class="fas fa-arrow-down-short-wide"></i>'
+                    : '<i class="fas fa-arrow-down-1-9"></i>';
+
+                const list = filteredPrograms();
+                const el = $('#programList');
+                el.innerHTML = list.length ? list.map(program => {
+                    const status = statusOf(program);
+                    return `<li class="pl-item${program.id === state.selectedId ? ' selected' : ''}" data-pid="${esc(program.id)}" role="option" aria-selected="${program.id === state.selectedId}" tabindex="0">
+                        <span class="pl-status ${status === 'none' ? '' : status}">${STATUS_ICONS[status]}</span>
+                        <span class="pl-iter">Iter ${esc(program.iteration)}</span>
+                        <span class="pl-score">${fmt.score(program.fitness?.finalScore, 2)}</span>
+                    </li>`;
+                }).join('') + `<li class="list-note">${state.listSearch || state.listFilter !== 'all' ? 'Filters active' : `${state.programs.length} programs`}</li>`
+                    : '<li class="placeholder" style="padding:.9rem .5rem">No programs match this filter.</li>';
+            }
+
+            $('#programList').addEventListener('click', e => {
+                const item = e.target.closest('.pl-item');
+                if (item) selectProgram(item.dataset.pid);
+            });
+            $('#programList').addEventListener('keydown', e => {
+                if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('pl-item')) {
+                    e.preventDefault();
+                    selectProgram(e.target.dataset.pid);
+                }
+            });
+            $('#listSearch').addEventListener('input', e => {
+                state.listSearch = e.target.value;
+                renderList();
+            });
+            $('#filterChips').addEventListener('click', e => {
+                const chip = e.target.closest('.fchip');
+                if (!chip) return;
+                state.listFilter = chip.dataset.filter;
+                renderList();
+            });
+            $('#sortToggle').addEventListener('click', () => {
+                state.listSort = state.listSort === 'iteration' ? 'score' : 'iteration';
+                renderList();
+            });
+
+            /* ============================== Fitness landscape chart ============================== */
+
+            function renderChart() {
+                const box = $('#chartBox');
+                box.innerHTML = '';
+
+                const bars = state.programs.slice().sort((a, b) => (a.iteration ?? 0) - (b.iteration ?? 0));
+                if (bars.length < 2) {
+                    box.innerHTML = '<div class="placeholder chart-empty"><i class="fas fa-chart-column"></i>Run a few iterations to see the fitness landscape.</div>';
+                    $('#chartMeta').textContent = '';
+                    return;
+                }
+
+                const scores = bars.map(p => p.fitness?.finalScore ?? 0);
+                const lo = Math.min(...scores), hi = Math.max(...scores);
+                const range = (hi - lo) || Math.max(Math.abs(hi) * .1, 1);
+
+                const H = 150, padTop = 16, padBottom = 22;
+                const bw = 26, gap = bars.length < 14 ? 72 : 8;
+                const W = bars.length * bw + (bars.length - 1) * gap;
+                const labelEvery = Math.ceil(bars.length / 20);
+
+                const svgParts = [
+                    `<line class="chart-axis" x1="0" y1="${H - padBottom}" x2="${W + bw / 2}" y2="${H - padBottom}"/>`,
+                    `<title>Final score per program. Winner highlighted.</title>`
+                ];
+                bars.forEach((program, i) => {
+                    const score = Math.max(0, program.fitness?.finalScore ?? 0);
+                    const h = 10 + (score - lo) / range * (H - padTop - padBottom - 10);
+                    const x = i * (bw + gap);
+                    const y = H - padBottom - h;
+                    const status = statusOf(program);
+                    let fill;
+                    if (status === 'best') fill = 'url(#barGradBest)';
+                    else if (status === 'up') fill = '#3b82f6';
+                    else if (status === 'down') fill = '#7f1d1d';
+                    else fill = '#3b3b42';
+                    const sel = program.id === state.selectedId ? ' selected' : '';
+                    const label = (status === 'best' || i % labelEvery === 0)
+                        ? `<text class="chart-label" x="${x + bw / 2}" y="${H - 7}" text-anchor="middle">${esc(program.iteration)}</text>` : '';
+                    const valueLabel = status === 'best'
+                        ? `<text class="chart-val" x="${x + bw / 2}" y="${y - 5}" text-anchor="middle">${fmt.score(score, 2)}</text>` : '';
+                    svgParts.push(
+                        `<g class="chart-bar${sel}" data-pid="${esc(program.id)}" tabindex="-1">
+                            <title>Iter ${esc(program.iteration)} — score ${fmt.score(score)}${program.deltaPct !== null ? ` (${fmt.pct(program.deltaPct)} vs parent)` : ''}</title>
+                            <rect x="${x}" y="${y}" width="${bw}" height="${h}" fill="${fill}"/>${label}${valueLabel}
+                        </g>`);
+                });
+
+                const defs = `<defs>
+                    <linearGradient id="barGradBest" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0" stop-color="#34d399"/><stop offset="1" stop-color="#047857"/>
+                    </linearGradient>
+                </defs>`;
+
+                box.innerHTML = `<svg viewBox="0 0 ${W + bw / 2} ${H}" role="img" aria-label="Final score of each program across iterations" style="font-size:10px">${defs}${svgParts.join('')}</svg>`;
+                $('#chartMeta').textContent = `${bars.length} programs`;
+            }
+
+            $('#chartBox').addEventListener('click', e => {
+                const bar = e.target.closest('.chart-bar');
+                if (bar) selectProgram(bar.dataset.pid);
+            });
+
+            /* ============================== Selection ============================== */
+
+            function selectProgram(id) {
+                if (!id) return;
+                const program = state.byId[id];
+                if (!program) {
+                    console.warn('Program not found for id: ' + id);
+                    return;
+                }
+                state.selectedId = id;
+                state.currentProgram = program;
+                renderTree();
+                renderList();
+                renderChart();
+                syncSelectedMarks();
+                renderDetails();
+                renderBenchmark(state.data);
+                renderStatistics(state.data);
+                $('#detailCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+
+            /* Only re-tint selection to avoid full re-renders on arrow keys. */
+            function syncSelectedMarks() {
+                $$('[data-pid]').forEach(el => {
+                    const on = el.dataset.pid === state.selectedId;
+                    if (el.classList.contains('tn-pill')) {
+                        el.classList.toggle('selected', on);
+                        el.setAttribute('aria-selected', String(on));
+                    } else if (el.classList.contains('pl-item')) {
+                        el.classList.toggle('selected', on);
+                        el.setAttribute('aria-selected', String(on));
+                    }
+                });
+            }
+
+            /* Keyboard navigation across the current filtered/sorted list. */
+            document.addEventListener('keydown', e => {
+                if (e.target.matches('input, textarea, select') || e.metaKey || e.ctrlKey || e.altKey) return;
+                if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'j' && e.key !== 'k') return;
+                if ($('#dashboard').hidden) return;
+                e.preventDefault();
+                const list = filteredPrograms();
+                if (!list.length) return;
+                const idx = list.findIndex(p => p.id === state.selectedId);
+                const dir = (e.key === 'ArrowDown' || e.key === 'j') ? 1 : -1;
+                const next = list[Math.max(0, Math.min(list.length - 1, (idx === -1 ? 0 : idx) + dir))];
+                selectProgramSilently(next.id);
+            });
+
+            function selectProgramSilently(id) {
+                state.selectedId = id;
+                state.currentProgram = state.byId[id];
+                syncSelectedMarks();
+                renderDetails();
+                renderBenchmark(state.data);
+                renderStatistics(state.data);
+            }
+
+            /* Cross-highlight tree/list/chart entries sharing the same program id */
+            document.addEventListener('mouseover', e => {
+                const el = e.target.closest?.('[data-pid]');
+                if (!el || !el.dataset.pid) return;
+                document.querySelectorAll(`[data-pid="${CSS.escape(el.dataset.pid)}"]`)?.forEach(x => x.classList.add('xhl'));
+            });
+            document.addEventListener('mouseout', e => {
+                if (e.target.closest?.('[data-pid]')) {
+                    document.querySelectorAll('.xhl').forEach(x => x.classList.remove('xhl'));
+                }
+            });
+
+            /* ============================== Tabs ============================== */
+
+            $('#detailTabs').addEventListener('click', e => {
+                const tab = e.target.closest('.tab-btn');
+                if (!tab) return;
+                state.activeTab = tab.dataset.tab;
+                $$('.tab-btn', $('#detailTabs')).forEach(b => b.classList.toggle('active', b === tab));
+                renderDetails();
+            });
+
+            /* ============================== Program details ============================== */
+
+            function ring(pct, color) {
+                const p = Math.max(0, Math.min(100, pct));
+                return `<span class="ring-circle" style="background:conic-gradient(${color} ${p}%, rgba(255,255,255,.07) 0)">
+                    <span>${fmt.score(pct / 100, 2)}</span></span>`;
+            }
+
+            function linesOf(source) {
+                return String(source ?? '').split('\n');
+            }
+
+            /** LCS-based line diff. Returns null when inputs are too large for the O(n·m) table. */
+            function lineDiff(aLines, bLines) {
+                const n = aLines.length, m = bLines.length;
+                if (n * m > 6000000) return null;
+                const dp = [];
+                for (let i = 0; i <= n; i++) dp.push(new Uint16Array(m + 1));
+                for (let i = n - 1; i >= 0; i--) {
+                    for (let j = m - 1; j >= 0; j--) {
+                        dp[i][j] = aLines[i] === bLines[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+                    }
+                }
+                const ops = [];
+                let i = 0, j = 0;
+                while (i < n && j < m) {
+                    if (aLines[i] === bLines[j]) { ops.push({ t: 'ctx', s: bLines[j] }); i++; j++; }
+                    else if (dp[i + 1][j] >= dp[i][j + 1]) { ops.push({ t: 'del', s: aLines[i] }); i++; }
+                    else { ops.push({ t: 'add', s: bLines[j] }); j++; }
+                }
+                while (i < n) { ops.push({ t: 'del', s: aLines[i++] }); }
+                while (j < m) { ops.push({ t: 'add', s: bLines[j++] }); }
+                return ops;
+            }
+
+            function renderDiffHtml(parentSource, source) {
+                const ops = lineDiff(linesOf(parentSource), linesOf(source));
+                if (!ops) {
+                    return '<div class="placeholder">Files too large to diff — use the Code tab instead.</div>';
+                }
+                const CHANGE_LIMIT = 6, CONTEXT_SHOW = 4;
+                let html = '', ctxRun = [];
+                const flushCtx = () => {
+                    if (!ctxRun.length) return;
+                    if (ctxRun.length > CHANGE_LIMIT * 2 + 1) {
+                        html += `<span class="dl ctx">${esc(ctxRun[0])}</span>`;
+                        html += `<span class="dl fold">… ${ctxRun.length - 2} unchanged lines …</span>`;
+                        html += `<span class="dl ctx">${esc(ctxRun[ctxRun.length - 1])}</span>`;
+                    } else {
+                        ctxRun.forEach(line => { html += `<span class="dl ctx">${esc(line)}</span>`; });
+                    }
+                    ctxRun = [];
+                };
+                ops.forEach(op => {
+                    if (op.t === 'ctx') { ctxRun.push(op.s); if (ctxRun.length > CONTEXT_SHOW + 40) flushCtx(); }
+                    else {
+                        flushCtx();
+                        html += `<span class="dl ${op.t}">${esc(op.s)}</span>`;
+                    }
+                });
+                flushCtx();
+                return `<pre class="diff">${html}</pre>`;
+            }
+
+            function codeHtml(program) {
+                const sources = program.files && typeof program.files === 'object' && Object.keys(program.files).length
+                    ? Object.entries(program.files)
+                    : [['(solution)', program.solution ?? '']];
+
+                const sourceEscaped = lines => lines.map(l => `<span class="cl">${esc(l) || '\n'}</span>`).join('\n');
+
+                const panes = sources.map(([filename, source]) => {
+                    const lines = linesOf(source);
+                    return `<div class="code-window">
+                        <div class="cw-head">
+                            <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+                            <span class="cw-name" title="${esc(filename)}">${esc(filename)} · ${lines.length} lines</span>
+                            <div class="cw-tools">
+                                <button class="copy-btn" data-copy="source" title="Copy this file"><i class="fas fa-copy"></i> Copy</button>
+                            </div>
+                        </div>
+                        <div class="code-scroll"><pre class="code">${sourceEscaped(lines)}</pre></div>
+                    </div>`;
+                }).join('');
+
+                let viewSwitch = '';
+                if (program.parent && state.byId[program.parent]) {
+                    const parent = state.byId[program.parent];
+                    const parentSource = (program.primaryFile && parent.files?.[program.primaryFile])
+                        ?? (sources.length === 1 ? parent.solution : null);
+                    if (parentSource != null) {
+                        const seg = `<div class="seg" role="group" aria-label="Code view">
+                            <button data-view="code" class="${state.codeView === 'code' ? 'active' : ''}">Code</button>
+                            <button data-view="diff" class="${state.codeView === 'diff' ? 'active' : ''}">Diff vs parent</button>
+                        </div>`;
+                        viewSwitch = seg + '<div class="diff-note">' +
+                            (state.codeView === 'diff'
+                                ? 'Changes introduced by this candidate relative to its parent (iteration ' + esc(parent.iteration) + ').'
+                                : '') + '</div>' +
+                            (state.codeView === 'diff' ? renderDiffHtml(parentSource, sources[0][1]) : '');
+                    }
+                }
+
+                if (state.codeView === 'diff' && viewSwitch) return viewSwitch;
+                return viewSwitch + panes;
+            }
+
+            function metricsHtml(program) {
+                const metrics = program.fitness?.performanceMetrics;
+                if (!metrics) {
+                    return '<div class="placeholder">No performance metrics recorded for this program.</div>';
+                }
+                const mem = metrics.memoryUsage?.delta || {};
+                const cpu = metrics.cpuUsage || {};
+                const gc = metrics.gcStats || {};
+                const status = metrics.resourceMetrics
+                    ? (metrics.resourceMetrics.available
+                        ? `Collected from ${metrics.resourceMetrics.processCount} Node process(es)`
+                        : 'No instrumented Node process was detected')
+                    : 'Not recorded in this run';
+                return `
+                    <div class="pm-grid">
+                        <div class="pm-card"><h4><i class="fas fa-stopwatch"></i> Execution</h4>
+                            <div class="pm-row"><span>Time</span><b>${fmt.raw(metrics.executionTime)} ms</b></div></div>
+                        <div class="pm-card"><h4><i class="fas fa-memory"></i> Memory</h4>
+                            <div class="pm-row"><span>Heap used</span><b>${fmt.mb(mem.heapUsed)}</b></div>
+                            <div class="pm-row"><span>Heap total</span><b>${fmt.mb(mem.heapTotal)}</b></div>
+                            <div class="pm-row"><span>RSS</span><b>${fmt.mb(mem.rss)}</b></div></div>
+                        <div class="pm-card"><h4><i class="fas fa-microchip"></i> CPU</h4>
+                            <div class="pm-row"><span>User</span><b>${fmt.raw(cpu.user)} ms</b></div>
+                            <div class="pm-row"><span>System</span><b>${fmt.raw(cpu.system)} ms</b></div></div>
+                        <div class="pm-card"><h4><i class="fas fa-recycle"></i> Garbage collection</h4>
+                            <div class="pm-row"><span>Collections</span><b>${esc(fmt.int(gc.count))}</b></div>
+                            <div class="pm-row"><span>Total GC time</span><b>${fmt.raw(gc.totalTime)} ms</b></div></div>
+                        <div class="pm-card"><h4><i class="fas fa-circle-info"></i> Collection</h4>
+                            <div class="pm-row" style="flex-direction:column">${esc(status)}</div></div>
+                    </div>`;
+            }
+
+            function lineageHtml(program) {
+                const line = [];
+                let cursor = program;
+                while (cursor?.parent && state.byId[cursor.parent]) {
+                    cursor = state.byId[cursor.parent];
+                    line.unshift(cursor);
+                }
+                if (!line.length) return '';
+                return `<span class="crumb">lineage · ${line.map(anc =>
+                    `<button data-pid="${esc(anc.id)}" title="id ${esc(anc.id)}">it ${esc(anc.iteration)}</button>`
+                ).join('<span class="sep">›</span>')}</span>`;
+            }
+
+            function renderDetails() {
+                const program = state.currentProgram;
+                const head = $('#detailHead');
+                const content = $('#tabContent');
+
+                if (!program) {
+                    head.innerHTML = '<div class="d-title"><h2>Program Details</h2></div>';
+                    content.innerHTML = '<div class="placeholder"><i class="fas fa-file-code"></i>Select a program from the tree, list, or chart to inspect it.</div>';
+                    return;
+                }
+
+                const status = statusOf(program);
+                const isBest = status === 'best';
+                const fits = program.fitness || {};
+                const delta = program.deltaPct;
+
+                head.innerHTML = `
+                    <div>
+                        <div class="d-title">
+                            <h2>Iteration ${esc(program.iteration)}</h2>
+                            ${isBest ? '<span class="badge badge-best"><i class="fas fa-trophy"></i> Best</span>' : ''}
+                            ${delta !== null && delta !== 0 ? `<span class="badge badge-delta${delta < 0 ? ' neg' : ''}" title="vs parent">${fmt.pct(delta)}</span>` : ''}
+                        </div>
+                        <div class="d-sub">
+                            <span>id <code title="${esc(program.id)}">${esc(fmt.shortId(program.id))}</code>
+                                <button class="copy-btn" data-copy="id" title="Copy full ID"><i class="fas fa-copy"></i></button></span>
+                            ${program.parent ? `<span>parent <code title="${esc(program.parent)}">${esc(fmt.shortId(program.parent))}</code></span>` : ''}
+                            ${lineageHtml(program)}
+                        </div>
+                    </div>
+                    <div class="score-rings">
+                        <span class="ring">${ring((fits.qualityScore ?? 0) * 100, '#3b82f6')}
+                            <span class="ring-label"><i class="fas fa-check-circle"></i> Quality</span></span>
+                        <span class="ring">${ring((fits.efficiencyScore ?? 0) * 100, '#3b82f6')}
+                            <span class="ring-label"><i class="fas fa-gauge-high"></i> Efficiency</span></span>
+                        <span class="ring ring-main">${ring((fits.finalScore ?? 0) * 100, isBest ? '#10b981' : 'rgba(255,255,255,.35)')}
+                            <span class="ring-label"><i class="fas fa-star"></i> Final</span></span>
+                    </div>`;
+
+                const hasPrompt = Boolean(program.generationPrompt);
+                const hasFeedback = Boolean(program.feedback || program.feedbackPrompt);
+                $$('.tab-btn', $('#detailTabs')).forEach(b => {
+                    const flagged = (b.dataset.tab === 'prompt' && hasPrompt) || (b.dataset.tab === 'feedback' && hasFeedback);
+                    b.style.opacity = ((b.dataset.tab === 'prompt' && !hasPrompt) || (b.dataset.tab === 'feedback' && !hasFeedback)) ? '.5' : '1';
+                    b.title = flagged
+                        ? (b.dataset.tab === 'feedback' ? program.feedback ? 'Feedback from the LLM' : 'Feedback prompt' : 'Prompt used to generate this candidate')
+                        : '';
+                });
+
+                let body = '';
+                if (state.activeTab === 'code') body = codeHtml(program);
+                else if (state.activeTab === 'prompt') body = program.generationPrompt
+                    ? `<div class="code-window">
+                          <div class="cw-head"><span class="cw-name">generation prompt</span>
+                              <div class="cw-tools"><button class="copy-btn" data-copy="prompt"><i class="fas fa-copy"></i> Copy</button></div></div>
+                          <div class="code-scroll"><div class="text-block" style="border:none;border-radius:0">${esc(program.generationPrompt)}</div></div>
+                       </div>`
+                    : '<div class="placeholder">No generation prompt recorded for this program (e.g. baseline iterations seeded from disk).</div>';
+                else if (state.activeTab === 'feedback') body = (program.feedback || program.feedbackPrompt)
+                    ? `${program.feedback ? `<div class="code-window">
+                          <div class="cw-head"><span class="cw-name">feedback</span>
+                              <div class="cw-tools"><button class="copy-btn" data-copy="feedback"><i class="fas fa-copy"></i> Copy</button></div></div>
+                          <div class="code-scroll"><div class="text-block" style="border:none;border-radius:0">${esc(program.feedback)}</div></div>
+                       </div>` : ''}
+                       ${program.feedbackPrompt ? `<div class="code-window">
+                          <div class="cw-head"><span class="cw-name">feedback prompt</span>
+                              <div class="cw-tools"><button class="copy-btn" data-copy="feedbackPrompt"><i class="fas fa-copy"></i> Copy</button></div></div>
+                          <div class="code-scroll"><div class="text-block" style="border:none;border-radius:0">${esc(program.feedbackPrompt)}</div></div>
+                       </div>` : ''}`
+                    : '<div class="placeholder">This run has feedback disabled, so no feedback was recorded.</div>';
+                else body = metricsHtml(program);
+
+                content.innerHTML = body || '<div class="placeholder">Nothing to show.</div>';
+            }
+
+            /* Code view switch + copy buttons (delegated) */
+            $('#tabContent').addEventListener('click', e => {
+                const viewBtn = e.target.closest('.seg button[data-view]');
+                if (viewBtn && !viewBtn.disabled) {
+                    state.codeView = viewBtn.dataset.view;
+                    renderDetails();
+                    return;
+                }
+                const copyBtn = e.target.closest('.copy-btn[data-copy]');
+                if (copyBtn && copyBtn.querySelector('i')) copyBtn.dataset.orig = copyBtn.innerHTML;
+                if (copyBtn) {
+                    const program = state.currentProgram;
+                    const text = {
+                        source: () => {
+                            if (program.files && Object.keys(program.files).length) {
+                                const chosen = program.primaryFile && program.files[program.primaryFile] != null
+                                    ? program.primaryFile : Object.keys(program.files)[0];
+                                return program.files[chosen];
+                            }
+                            return program.solution ?? '';
+                        },
+                        id: () => program.id,
+                        prompt: () => program.generationPrompt ?? '',
+                        feedback: () => program.feedback ?? '',
+                        feedbackPrompt: () => program.feedbackPrompt ?? ''
+                    }[copyBtn.dataset.copy]?.();
+                    if (text != null) copyText(text, copyBtn);
+                }
+            });
+            $('#detailHead').addEventListener('click', e => {
+                const crumbBtn = e.target.closest('.crumb button');
+                if (crumbBtn) selectProgram(crumbBtn.dataset.pid);
+                const copyBtn = e.target.closest('.copy-btn');
+                if (copyBtn && copyBtn.dataset.orig === undefined) copyBtn.dataset.orig = copyBtn.innerHTML;
+                if (copyBtn) copyText(state.currentProgram?.id ?? '', copyBtn);
+            });
+
+            /* ============================== Metadata ============================== */
+
+            function metaRow(icon, key, value) {
+                return `<div class="meta-row"><span class="k"><i class="fas ${icon}"></i> ${key}</span><span class="v">${value}</span></div>`;
+            }
+
+            function renderMetadata(data) {
+                const meta = data.metadata || {};
+                const cfg = meta.config || {};
+                const model = cfg.llmModel || 'N/A';
+                $('#metadataContent').innerHTML = `
+                    <div class="meta-list">
+                        ${metaRow('fa-tag', 'Run ID', esc(meta.runId || '—'))}
+                        ${metaRow('fa-calendar', 'Started', esc(fmt.date(meta.startTime || data.timestamp)))}
+                        ${metaRow('fa-clock', 'Runtime', esc(fmt.runtime(meta.runtime)))}
+                        ${metaRow('fa-robot', 'Model', esc(model))}
+                        ${metaRow('fa-comment', 'Feedback', cfg.feedbackEnabled ? '<span style="color:var(--accent)">Enabled</span>' : 'N/A')}
+                        ${metaRow('fa-brain', 'Feedback model', esc(cfg.feedbackLlmModel || '—'))}
+                        ${metaRow('fa-layer-group', 'Iterations', esc(fmt.int(cfg.iterations)))}
+                        ${metaRow('fa-code-branch', 'Programs saved', esc(state.programs.length))}
+                    </div>
+                    ${meta.problemDescription ? `<div class="meta-desc">${esc(meta.problemDescription)}</div>` : ''}`;
+            }
+
+            /* ============================== Benchmark evidence ============================== */
+
+            function benchMetricsFor(candidate) {
+                return candidate?.fitness?.performanceMetrics?.benchmark || null;
+            }
+
+            function renderBenchmark(data) {
+                const plotEl = $('#benchPlot');
+                const content = $('#benchmarkContent');
+                const baseline = state.baseline;
+                const winner = state.best;
+                const baseM = benchMetricsFor(baseline);
+                const winM = benchMetricsFor(winner);
+
+                if (!baseM && !winM) {
+                    plotEl.innerHTML = '';
+                    content.innerHTML = '<div class="placeholder"><i class="fas fa-stopwatch"></i>This run has no benchmark samples. Manifest-backed runs record baseline vs winner medians here.</div>';
+                    return;
+                }
+
+                // Dot plot of raw samples
+                const draw = (m, color, medianColor) => {
+                    if (!m || !Array.isArray(m.samplesMs) || !m.samplesMs.length) return null;
+                    return { samples: m.samplesMs.map(Number).filter(Number.isFinite), median: Number(m.medianMs) };
+                };
+                const baseData = draw(baseM, '#3b82f6', '#60a5fa');
+                const winData = draw(winM, '#10b981', '#34d399');
+
+                let plotHtml = '';
+                if (baseData || winData) {
+                    const all = [];
+                    if (baseData) all.push(...baseData.samples, ...(Number.isFinite(baseData.median) ? [baseData.median] : []));
+                    if (winData) all.push(...winData.samples, ...(Number.isFinite(winData.median) ? [winData.median] : []));
+                    if (all.length) {
+                        const lo = Math.min(...all), hi = Math.max(...all);
+                        const pad = (hi - lo) * 0.06 || 1;
+                        const min = Math.max(0, lo - pad), max = hi + pad;
+                        const H = 74, plotH = 52;
+                        const x = v => 4 + (v - min) / (max - min) * 352;
+                        const dots = (d, fill, cy) => d ? d.samples.map((v, i) =>
+                            `<circle cx="${x(v).toFixed(1)}" cy="${cy + (i % 2 ? 4 : -4)}" r="3.2" fill="${fill}" opacity=".85"/>`).join('') : '';
+                        const med = (d, y) => d && Number.isFinite(d.median) ? `<line x1="${x(d.median).toFixed(1)}" y1="${y - 12}" x2="${x(d.median).toFixed(1)}" y2="${y + 14}" stroke="#fff" stroke-dasharray="3 3" stroke-width="1.4" opacity=".7"/>
+                            <text x="${x(d.median).toFixed(1)}" y="${y - 15}" text-anchor="middle" fill="#fff" font-size="8.5" font-family="Fira Code, monospace">${d.median.toFixed(2)}</text>` : '';
+                        plotHtml = `<svg viewBox="0 0 360 ${H}">
+                            <rect x="4" y="${plotH}" width="352" height="6" rx="3" fill="rgba(255,255,255,.05)"/>
+                            ${dots(baseData, '#3b82f6', plotH - 4)}
+                            ${dots(winData, '#10b981', plotH + 9)}
+                            ${med(baseData, plotH)}
+                            ${med(winData, plotH + 13)}
+                            <text x="4" y="${H - 2}" fill="#6b7280" font-size="8.5" font-family="Fira Code, monospace">${min.toFixed(0)} ms</text>
+                            <text x="352" y="${H - 2}" text-anchor="end" fill="#6b7280" font-size="8.5" font-family="Fira Code, monospace">${max.toFixed(0)} ms</text>
+                        </svg>
+                        <div style="display:flex;gap:1rem;font-size:.66rem;color:var(--text-3);margin-top:.15rem">
+                            <span><span class="t-dot t-baseline legend-dot" style="margin-right:.3rem"></span>baseline samples</span>
+                            <span><span class="t-dot t-winner legend-dot" style="margin-right:.3rem"></span>winner samples</span>
+                        </div>`;
+                    }
+                }
+                plotEl.innerHTML = plotHtml;
+
+                const blockFor = (label, m, cls) => {
+                    if (!m) return `<div class="bench-block"><div class="bench-title"><span class="t-dot ${cls}" style="background:#52525b"></span> ${esc(label)}</div><div class="bench-samples">Not recorded</div></div>`;
+                    const median = Number.isFinite(m.medianMs) ? m.medianMs.toFixed(3) + ' ms' : 'n/a';
+                    const mad = Number.isFinite(m.madMs) ? m.madMs.toFixed(3) + ' ms' : 'n/a';
+                    const samples = Array.isArray(m.samplesMs) && m.samplesMs.length
+                        ? esc(m.samplesMs.map(s => Number(s).toFixed(2)).join(' · ')) : 'none recorded';
+                    return `<div class="bench-block">
+                        <div class="bench-title"><span class="t-dot ${cls}"></span> ${esc(label)}</div>
+                        <div class="bench-nums"><span>median <b>${median}</b></span><span>MAD <b>${mad}</b></span></div>
+                        <div class="bench-samples">${samples}</div>
+                    </div>`;
+                };
+
+                let speedLine = '';
+                if (Number.isFinite(baseM?.medianMs) && Number.isFinite(winM?.medianMs) && baseM.medianMs !== 0) {
+                    speedLine = `<div class="bench-block" style="border-top:none;padding-top:0">
+                        <div class="bench-nums"><span>median change <b class="${winM.medianMs < baseM.medianMs ? 'pos' : ''}" style="color:${winM.medianMs < baseM.medianMs ? 'var(--accent)' : 'var(--danger)'}">${fmt.pct((baseM.medianMs - winM.medianMs) / Math.abs(baseM.medianMs) * 100)}</b></span></div>
+                    </div>`;
+                }
+
+                content.innerHTML =
+                    blockFor('Baseline (iteration 0)', baseM, 't-baseline') +
+                    (winner ? blockFor(`Winner (iteration ${esc(winner.iteration ?? '—')})`, winM, 't-winner') : '') +
+                    speedLine;
+            }
+
+            /* ============================== Artifacts ============================== */
+
+            function renderArtifacts(data, selectedFiles, runFile) {
+                const content = $('#artifactContent');
+                const runId = data.metadata?.runId || (runFile ? runFile.name.replace(/\.json$/i, '') : null);
+                if (!runId) {
+                    content.innerHTML = '<div class="placeholder">This snapshot has no run ID, so artifacts cannot be matched.</div>';
+                    return;
+                }
+                const patch = selectedFiles.find(f => f.name === runId + '.patch');
+                const report = selectedFiles.find(f => f.name === runId + '.report.md');
                 const links = [];
                 if (patch) {
                     const url = URL.createObjectURL(patch);
-                    app.artifactUrls.push(url);
-                    links.push(`<a href="${url}" download="${escapeHtml(patch.name)}">Download patch</a>`);
+                    state.artifactUrls.push(url);
+                    links.push(`<a href="${url}" download="${esc(patch.name)}"><i class="fas fa-code-pull-request"></i> Download <span style="font-family:var(--font-mono);font-size:.7rem">${esc(patch.name)}</span></a>`);
                 }
                 if (report) {
                     const url = URL.createObjectURL(report);
-                    app.artifactUrls.push(url);
-                    links.push(`<a href="${url}" target="_blank" rel="noopener">Open report</a>`);
+                    state.artifactUrls.push(url);
+                    links.push(`<a href="${url}" target="_blank" rel="noopener"><i class="fas fa-file-lines"></i> Open <span style="font-family:var(--font-mono);font-size:.7rem">${esc(report.name)}</span></a>`);
                 }
-                const missing = [!patch && 'patch', !report && 'report'].filter(Boolean);
-                content.innerHTML = links.length
-                    ? `<p>${links.join(' &nbsp; · &nbsp; ')}</p>${missing.length ? `<p class="placeholder">Select the matching ${missing.join(' and ')} file too to add its link.</p>` : ''}`
-                    : '<p class="placeholder">Select the matching .patch and .report.md files with the run JSON to link them here.</p>';
-            }
 
-            /**
-             * Display the compact program list
-             */
-            function displayPrograms(programs) {
-                const programList = document.getElementById('programList');
-                programList.innerHTML = '';
-
-                programs.forEach(program => {
-                    const listItem = document.createElement('li');
-                    listItem.classList.add('programItem');
-
-                    // Create program status icon
-                    let scoreIcon = getStatusIcon(program);
-
-                    listItem.innerHTML = `
-                        <div>
-                            <strong>Iter ${program.iteration}</strong>
-                            ${scoreIcon}
-                            <span style="float:right">${program.fitness.finalScore.toFixed(2)}</span>
-                        </div>
-                    `;
-                    listItem.addEventListener('click', () => displayProgram(program.id));
-                    programList.appendChild(listItem);
-                });
-            }
-
-            /**
-             * Get a status icon based on program improvement
-             */
-            function getStatusIcon(program) {
-                if (app.bestProgram && program.id === app.bestProgram.id) {
-                    return '<i class="fas fa-trophy" style="color:#0f0"></i>';
-                } else if (program.improved) {
-                    return '<i class="fas fa-arrow-up" style="color:#0f0"></i>';
-                } else if (program.degraded) {
-                    return '<i class="fas fa-arrow-down" style="color:#f00"></i>';
+                if (links.length) {
+                    const missing = [!patch && 'patch', !report && 'report'].filter(Boolean);
+                    content.innerHTML = `<div class="artifact-links">${links.join('\n')}</div>` +
+                        (missing.length ? `<div class="placeholder">Also select the matching <b>${esc(missing.join('</b> and <b>'))}</b> file to add its link.</div>` : '');
+                } else {
+                    content.innerHTML = '<div class="placeholder">Select the run\'s <b>.patch</b> and <b>.report.md</b> together with the JSON in the same file picker action to link them here.</div>';
                 }
-                return '';
             }
 
-            /**
-             * Render program details in the details section
-             */
-            function renderProgramDetails(program) {
-                const programDetailsContent = document.getElementById('programDetailsContent');
+            /* ============================== Statistics ============================== */
 
-                // Create compact header with program info
-                const headerHtml = `
-                    <div class="program-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #444; padding-bottom:10px;">
-                        <div>
-                            <h2 style="margin:0; display:inline-block;">
-                                <i class="fas fa-file-code"></i> Iteration ${program.iteration}
-                                ${program.id === app.bestProgram?.id ? '<span style="color:#0f0; margin-left:8px;"><i class="fas fa-trophy"></i> BEST</span>' : ''}
-                            </h2>
-                            <div style="margin-top:5px; font-size:12px; color:#aaa;">
-                                ID: ${program.id.substring(0,8)}... ${program.parent ? `| Parent: ${program.parent.substring(0,8)}...` : ''}
-                            </div>
+            function renderStatistics() {
+                const el = $('#statisticsContent');
+                const programs = state.programs;
+                if (!programs.length) { el.innerHTML = '<p class="placeholder">No programs to analyze.</p>'; return; }
+
+                const best = state.best;
+                const worst = programs.reduce((acc, cur) =>
+                    (cur.fitness?.finalScore ?? Infinity) < (acc.fitness?.finalScore ?? Infinity) ? cur : acc, programs[0]);
+                const avg = key => programs.reduce((s, p) => s + (p.fitness?.[key] ?? 0), 0) / programs.length;
+
+                const metrics = best?.fitness?.performanceMetrics || {};
+
+                // Sparkline of scores ordered by iteration
+                const sorted = programs.slice().sort((a, b) => (a.iteration ?? 0) - (b.iteration ?? 0));
+                const scores = sorted.map(p => p.fitness?.finalScore ?? 0);
+                const lo = Math.min(...scores), hi = Math.max(...scores);
+                const range = (hi - lo) || 1;
+                const W = 260, H = 44;
+                const pts = scores.map((s, i) => [
+                    scores.length > 1 ? 2 + i / (scores.length - 1) * (W - 4) : W / 2,
+                    H - 5 - (s - lo) / range * (H - 10)
+                ]);
+                const path = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+                const bestIdx = scores.indexOf(hi);
+                const spark = `<div id="scoreSpark">
+                    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Score trend across iterations">
+                        <path d="${path}" fill="none" stroke="#3b82f6" stroke-width="1.6" opacity=".8"/>
+                        <circle cx="${pts[bestIdx][0].toFixed(1)}" cy="${pts[bestIdx][1].toFixed(1)}" r="3" fill="#10b981"/>
+                    </svg>
+                    <div style="font-size:.66rem;color:var(--text-3);margin-top:.2rem">score trend · range ${fmt.score(lo, 3)} – ${fmt.score(hi, 3)}</div>
+                </div>`;
+
+                el.innerHTML = `
+                    <div class="stat-grid">
+                        <div class="stat-tile">
+                            <span class="st-label"><i class="fas fa-trophy"></i> Best</span>
+                            <div class="st-value pos">${fmt.score(best?.fitness?.finalScore)}</div>
+                            <div class="st-sub">iter ${esc(best?.iteration ?? '—')} · <button class="copy-link" data-pid="${esc(best?.id)}" style="background:none;border:none;color:var(--primary);font-size:.68rem;padding:0;cursor:pointer;font-family:var(--font-body)">view best</button></div>
                         </div>
-                        <div style="text-align:right; padding:5px; border-radius:5px; background:rgba(0,0,0,0.2);">
-                            <div style="display:flex; gap:15px; font-size:13px;">
-                                <div title="Quality Score">
-                                    <i class="fas fa-check-circle"></i> Quality
-                                    <div style="font-size:14px; font-weight:bold;">${program.fitness.qualityScore.toFixed(4)}</div>
-                                </div>
-                                <div title="Efficiency Score">
-                                    <i class="fas fa-tachometer-alt"></i> Efficiency
-                                    <div style="font-size:14px; font-weight:bold;">${program.fitness.efficiencyScore.toFixed(4)}</div>
-                                </div>
-                                <div title="Final Score" style="color:${program.id === app.bestProgram?.id ? '#0f0' : '#fff'}">
-                                    <i class="fas fa-star"></i> Final
-                                    <div style="font-size:16px; font-weight:bold;">${program.fitness.finalScore.toFixed(4)}</div>
-                                </div>
-                            </div>
+                        <div class="stat-tile">
+                            <span class="st-label"><i class="fas fa-arrow-down"></i> Weakest</span>
+                            <div class="st-value">${fmt.score(worst?.fitness?.finalScore)}</div>
+                            <div class="st-sub">iter ${esc(worst?.iteration ?? '—')}</div>
+                        </div>
+                        <div class="stat-tile">
+                            <span class="st-label"><i class="fas fa-calculator"></i> Avg quality</span>
+                            <div class="st-value">${fmt.score(avg('qualityScore'), 3)}</div>
+                        </div>
+                        <div class="stat-tile">
+                            <span class="st-label"><i class="fas fa-tachometer-alt"></i> Avg efficiency</span>
+                            <div class="st-value">${fmt.score(avg('efficiencyScore'), 3)}</div>
+                        </div>
+                        <div class="stat-tile">
+                            <span class="st-label"><i class="fas fa-stopwatch"></i> Best exec time</span>
+                            <div class="st-value">${fmt.raw(metrics.executionTime)}<span class="st-sub"> ms</span></div>
+                        </div>
+                        <div class="stat-tile">
+                            <span class="st-label"><i class="fas fa-memory"></i> Best heap</span>
+                            <div class="st-value">${esc(fmt.mb(metrics.memoryUsage?.delta?.heapUsed))}</div>
                         </div>
                     </div>
-                `;
-
-                // Generate performance metrics HTML if available
-                let performanceMetricsHtml = '';
-                if (program.fitness.performanceMetrics) {
-                    const metrics = program.fitness.performanceMetrics;
-                    try {
-                        // Format metrics with appropriate units
-                        const executionTimeMs = metrics.executionTime?.toFixed(2) || 'N/A';
-                        const heapUsedMB = metrics.memoryUsage?.delta?.heapUsed
-                            ? (metrics.memoryUsage.delta.heapUsed / (1024 * 1024)).toFixed(2)
-                            : 'N/A';
-                        const heapTotalMB = metrics.memoryUsage?.delta?.heapTotal
-                            ? (metrics.memoryUsage.delta.heapTotal / (1024 * 1024)).toFixed(2)
-                            : 'N/A';
-                        const rssMB = metrics.memoryUsage?.delta?.rss
-                            ? (metrics.memoryUsage.delta.rss / (1024 * 1024)).toFixed(2)
-                            : 'N/A';
-                        const userCPUms = metrics.cpuUsage?.user
-                            ? (metrics.cpuUsage.user / 1000).toFixed(2)
-                            : 'N/A';
-                        const systemCPUms = metrics.cpuUsage?.system
-                            ? (metrics.cpuUsage.system / 1000).toFixed(2)
-                            : 'N/A';
-                        const gcCount = metrics.gcStats?.count || 'N/A';
-                        const gcTime = metrics.gcStats?.totalTime?.toFixed(2) || 'N/A';
-                        const resourceMetricStatus = metrics.resourceMetrics
-                            ? metrics.resourceMetrics.available
-                                ? `Collected from ${metrics.resourceMetrics.processCount} Node process(es)`
-                                : 'No instrumented Node process was detected'
-                            : 'Not recorded in this run';
-
-                        performanceMetricsHtml = `
-                            <details style="margin-bottom:20px; background:#111; border:1px solid #333; border-radius:5px; padding:10px;">
-                                <summary style="cursor:pointer; font-weight:bold;">
-                                    <i class="fas fa-chart-line"></i> Performance Metrics
-                                </summary>
-                                <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:15px; padding:10px; margin-top:10px;">
-                                    <div class="metric-card" style="background:#1a1a1a; padding:10px; border-radius:5px;">
-                                        <h4 style="margin:0 0 8px 0;"><i class="fas fa-stopwatch"></i> Execution</h4>
-                                        <div>Time: <strong>${executionTimeMs} ms</strong></div>
-                                    </div>
-                                    <div class="metric-card" style="background:#1a1a1a; padding:10px; border-radius:5px;">
-                                        <h4 style="margin:0 0 8px 0;"><i class="fas fa-memory"></i> Memory</h4>
-                                        <div>Heap Used: <strong>${heapUsedMB} MB</strong></div>
-                                        <div>Heap Total: <strong>${heapTotalMB} MB</strong></div>
-                                        <div>RSS: <strong>${rssMB} MB</strong></div>
-                                    </div>
-                                    <div class="metric-card" style="background:#1a1a1a; padding:10px; border-radius:5px;">
-                                        <h4 style="margin:0 0 8px 0;"><i class="fas fa-microchip"></i> CPU</h4>
-                                        <div>User Time: <strong>${userCPUms} ms</strong></div>
-                                        <div>System Time: <strong>${systemCPUms} ms</strong></div>
-                                    </div>
-                                    <div class="metric-card" style="background:#1a1a1a; padding:10px; border-radius:5px;">
-                                        <h4 style="margin:0 0 8px 0;"><i class="fas fa-recycle"></i> Garbage Collection</h4>
-                                        <div>Count: <strong>${gcCount}</strong></div>
-                                        <div>Total Time: <strong>${gcTime} ms</strong></div>
-                                    </div>
-                                    <div class="metric-card" style="background:#1a1a1a; padding:10px; border-radius:5px;">
-                                        <h4 style="margin:0 0 8px 0;"><i class="fas fa-info-circle"></i> Collection</h4>
-                                        <div>${escapeHtml(resourceMetricStatus)}</div>
-                                    </div>
-                                </div>
-                            </details>
-                        `;
-                    } catch (error) {
-                        console.error('Error formatting performance metrics:', error);
-                        performanceMetricsHtml = `
-                            <div style="margin-bottom:20px; color:#f55;">
-                                <i class="fas fa-exclamation-triangle"></i> Error formatting performance metrics: ${error}
-                            </div>
-                        `;
-                    }
-                }
-
-                const fileEntries = program.files && typeof program.files === 'object'
-                    ? Object.entries(program.files)
-                    : [];
-                const codeHtml = fileEntries.length
-                    ? fileEntries.map(([filename, source]) => `
-                        <details style="margin:8px 0; background:#111; border:1px solid #333; border-radius:5px; padding:10px;" ${filename === program.primaryFile ? 'open' : ''}>
-                            <summary style="cursor:pointer; font-weight:bold;">${escapeHtml(filename)}</summary>
-                            <pre style="overflow-x:auto;"><code>${escapeHtml(source)}</code></pre>
-                        </details>`).join('')
-                    : `<pre id="code">${escapeHtml(program.solution)}</pre>`;
-                // Assemble the full content
-                programDetailsContent.innerHTML = `
-                    ${headerHtml}
-                    ${performanceMetricsHtml}
-                    ${program.generationPrompt ? `
-                        <details style="margin-bottom:20px; background:#111; border:1px solid #333; border-radius:5px; padding:10px;">
-                            <summary style="cursor:pointer; font-weight:bold;">
-                                <i class="fas fa-terminal"></i> Code Generation Prompt
-                            </summary>
-                            <pre style="margin-top:10px; background:#1a1a1a; padding:10px; border-radius:5px; overflow-x:auto;">${program.generationPrompt}</pre>
-                        </details>
-                    ` : ''}
-                    <h3><i class="fas fa-terminal"></i> Code</h3>
-                    ${codeHtml}
-                    ${program.feedback ? `
-                        <details style="margin-bottom:20px; background:#111; border:1px solid #333; border-radius:5px; padding:10px;">
-                            <summary style="cursor:pointer; font-weight:bold;">
-                                <i class="fas fa-comment-dots"></i> Feedback Prompt
-                            </summary>
-                            <pre style="margin-top:10px; background:#1a1a1a; padding:10px; border-radius:5px; overflow-x:auto;">${program.feedbackPrompt || 'N/A'}</pre>
-                        </details>
-                        <div class="feedback">
-                            <h3><i class="fas fa-comment-dots"></i> Feedback</h3>
-                            <pre id="feedback">${program.feedback}</pre>
-                        </div>
-                    ` : ''}
-                `;
+                    ${spark}`;
             }
 
-            /**
-             * Build the evolution tree visualization
-             */
-            function buildEvolutionTree(programs) {
-                // Build a mapping of program ID to node (with children)
-                const nodes = buildTreeNodes(programs);
-                const roots = findRootNodes(nodes, programs);
+            $('#statisticsContent').addEventListener('click', e => {
+                const link = e.target.closest('.copy-link');
+                if (link) selectProgram(link.dataset.pid);
+            });
 
-                // Sort children by iteration
-                sortTreeNodes(nodes);
+            /* ============================== Init ============================== */
 
-                // Render the tree HTML
-                return renderTreeHtml(roots);
-            }
+            // Keep the legacy global hook working (tree nodes call displayTreeProgram elsewhere).
+            window.displayTreeProgram = id => selectProgram(id);
 
-            /**
-             * Build tree nodes with parent-child relationships
-             */
-            function buildTreeNodes(programs) {
-                const nodes = {};
-
-                // Create nodes
-                programs.forEach(program => {
-                    nodes[program.id] = Object.assign({}, program, { children: [] });
-                });
-
-                // Build parent-child relationships
-                programs.forEach(program => {
-                    if (program.parent && nodes[program.parent]) {
-                        nodes[program.parent].children.push(nodes[program.id]);
-                    }
-                });
-
-                return nodes;
-            }
-
-            /**
-             * Find root nodes (programs without parents or with missing parents)
-             */
-            function findRootNodes(nodes, programs) {
-                const roots = [];
-
-                programs.forEach(program => {
-                    if (!program.parent || !nodes[program.parent]) {
-                        if (program.parent && !nodes[program.parent]) {
-                            console.warn(`Parent ID not found: ${program.id} -> ${program.parent}`);
-                        }
-                        roots.push(nodes[program.id]);
-                    }
-                });
-
-                return roots;
-            }
-
-            /**
-             * Sort tree nodes by iteration
-             */
-            function sortTreeNodes(nodes) {
-                Object.values(nodes).forEach(node => {
-                    if (node.children.length > 0) {
-                        node.children.sort((a, b) => a.iteration - b.iteration);
-                    }
-                });
-            }
-
-            /**
-             * Recursively render the tree as HTML
-             */
-            function renderTreeHtml(nodes) {
-                if (!nodes.length) return '';
-
-                let html = '<ul>';
-                nodes.forEach(node => {
-                    html += '<li>';
-
-                    // Determine node class based on improvement/degradation
-                    let nodeClass = getNodeClass(node);
-
-                    // Make the node clickable
-                    html += `<a href="#" class="${nodeClass}" onclick="displayTreeProgram('${node.id}'); return false;" data-id="${node.id}">`;
-
-                    // Add appropriate icon
-                    html += getNodeIcon(node);
-
-                    // Add iteration and score
-                    html += `Iteration ${node.iteration}`;
-                    html += ` <span class="score">(${node.fitness.finalScore.toFixed(2)})</span>`;
-                    html += '</a>';
-
-                    // Recursively render children
-                    html += renderTreeHtml(node.children);
-                    html += '</li>';
-                });
-                html += '</ul>';
-
-                return html;
-            }
-
-            /**
-             * Get appropriate CSS class for a tree node
-             */
-            function getNodeClass(node) {
-                if (app.bestProgram && node.id === app.bestProgram.id) {
-                    return 'best';
-                } else if (node.improved) {
-                    return 'improved';
-                } else if (node.degraded) {
-                    return 'degraded';
-                }
-                return '';
-            }
-
-            /**
-             * Get appropriate icon HTML for a tree node
-             */
-            function getNodeIcon(node) {
-                if (app.bestProgram && node.id === app.bestProgram.id) {
-                    return '<i class="fas fa-trophy"></i> ';
-                } else if (node.improved) {
-                    return '<i class="fas fa-arrow-up"></i> ';
-                } else if (node.degraded) {
-                    return '<i class="fas fa-arrow-down"></i> ';
-                }
-                return '';
-            }
-
-            /**
-             * Display program statistics
-             */
-            function displayStatistics(data) {
-                const statisticsContent = document.getElementById('statisticsContent');
-                const programs = data.programs;
-
-                if (!programs || programs.length === 0) {
-                    statisticsContent.innerHTML = '<p>No programs available to calculate statistics.</p>';
-                    return;
-                }
-
-                const bestProgram = app.bestProgram;
-                const worstProgram = programs.reduce((worst, current) =>
-                    current.fitness.finalScore < worst.fitness.finalScore ? current : worst, programs[0]
-                );
-
-                // Calculate average scores
-                const scores = calculateAverageScores(programs);
-
-                // Performance metrics for best program
-                let performanceHtml = '';
-                if (bestProgram.fitness.performanceMetrics) {
-                    try {
-                        const metrics = bestProgram.fitness.performanceMetrics;
-                        const executionTimeMs = metrics.executionTime?.toFixed(2) || 'N/A';
-                        const heapUsedMB = metrics.memoryUsage?.delta?.heapUsed
-                            ? (metrics.memoryUsage.delta.heapUsed / (1024 * 1024)).toFixed(2)
-                            : 'N/A';
-                        const gcCount = metrics.gcStats?.count || 'N/A';
-
-                        performanceHtml = `
-                            <div class="statisticItem">
-                                <h3><i class="fas fa-chart-line"></i> Best Performance</h3>
-                                <p><i class="fas fa-stopwatch"></i> Time: ${executionTimeMs} ms</p>
-                                <p><i class="fas fa-memory"></i> Memory: ${heapUsedMB} MB</p>
-                                <p><i class="fas fa-recycle"></i> GC Count: ${gcCount}</p>
-                            </div>
-                        `;
-                    } catch (error) {
-                        console.error('Error formatting performance statistics:', error);
-                    }
-                }
-
-                statisticsContent.innerHTML = `
-                    <div class="statisticItem">
-                        <h3><i class="fas fa-trophy"></i> Best Program</h3>
-                        <p><i class="fas fa-star"></i> Final: ${bestProgram.fitness.finalScore.toFixed(4)}</p>
-                        <p><i class="fas fa-code-branch"></i> Iteration: ${bestProgram.iteration}</p>
-                        <p><a href="#" onclick="displayTreeProgram('${bestProgram.id}'); return false;">View Best</a></p>
-                    </div>
-                    <div class="statisticItem">
-                        <h3><i class="fas fa-thumbs-down"></i> Worst Program</h3>
-                        <p><i class="fas fa-star"></i> Final: ${worstProgram.fitness.finalScore.toFixed(4)}</p>
-                        <p><i class="fas fa-code-branch"></i> Iteration: ${worstProgram.iteration}</p>
-                    </div>
-                    <div class="statisticItem">
-                        <h3><i class="fas fa-calculator"></i> Average Scores</h3>
-                        <p><i class="fas fa-check-circle"></i> Quality: ${scores.quality.toFixed(4)}</p>
-                        <p><i class="fas fa-tachometer-alt"></i> Efficiency: ${scores.efficiency.toFixed(4)}</p>
-                        <p><i class="fas fa-star"></i> Final: ${scores.final.toFixed(4)}</p>
-                    </div>
-                    ${performanceHtml}
-                `;
-            }
-
-            /**
-             * Calculate average scores for all programs
-             */
-            function calculateAverageScores(programs) {
-                const totalQuality = programs.reduce((sum, program) => sum + program.fitness.qualityScore, 0);
-                const totalEfficiency = programs.reduce((sum, program) => sum + program.fitness.efficiencyScore, 0);
-                const totalFinal = programs.reduce((sum, program) => sum + program.fitness.finalScore, 0);
-                const count = programs.length;
-
-                return {
-                    quality: totalQuality / count,
-                    efficiency: totalEfficiency / count,
-                    final: totalFinal / count
-                };
-            }
-
-            // Initialize the app
-            init();
-
-            // Expose public functions
-            window.displayTreeProgram = displayProgram;
+            showLoadedLayout(false);
         })();
     </script>
 </body>

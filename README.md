@@ -125,6 +125,14 @@ cp alpharevolve.example.json alpharevolve.json
 npm run cli -- optimize --config alpharevolve.json
 ```
 
+Check setup first with:
+
+```sh
+npm run cli -- check --config alpharevolve.json
+```
+
+Preflight validates the manifest and source paths, checks that both command executables resolve, and reports the sandbox backend and run settings, including command arguments (sensitive flag values are redacted). It does not launch the correctness or benchmark commands and does not call an LLM. On non-macOS platforms, use `--unsandboxed` only when the configured evaluation commands are trusted; this reports that sandboxing is disabled.
+
 The manifest lives at the project root, and file paths are relative to the directory containing the manifest. `files` is the complete allowlist of TypeScript and JavaScript files the model may change. Correctness runs first in a disposable workspace. Only a passing candidate is benchmarked, in a separate fresh workspace. Each command is launched directly with its `args` array, without shell expansion. Use `{workspace}` or `{primary}` in arguments when a workspace path is needed. Evaluation is sandboxed on macOS and denies network access by default; `allowNetwork: true` opts into network access.
 
 ```json
@@ -152,6 +160,8 @@ The manifest lives at the project root, and file paths are relative to the direc
 `correctness` and `benchmark` each require a `command` and may include an `args` array. `warmupRuns` defaults to 1, `sampleRuns` to 5, and the other run settings shown above are optional. Benchmark commands receive `ALPHA_BENCHMARK_WARMUP_RUNS` and `ALPHA_BENCHMARK_SAMPLE_RUNS`; print one JSON object to stdout with the configured `warmupRuns` and exactly `sampleRuns` finite, non-negative `samplesMs` values. AlphaRevolve scores correctness as 1 for a passing candidate, combines it with benchmark efficiency using the configured weights, and uses sample median and median absolute deviation for ranking. It writes the candidate snapshots and metrics to `runs/<runId>.json` and `runs/<runId>.jsonl`, plus a patch and report at `runs/<runId>.patch` and `runs/<runId>.report.md`. Review the patch and report, then apply it yourself with the commands shown in the report. The existing single-file CLI remains available.
 
 The repository includes [alpharevolve.example.json](alpharevolve.example.json) as a runnable task definition for the sorting example.
+
+To inspect a manifest-backed run in the HTML explorer, select its `runs/<runId>.json` file. Select the matching `.patch` and `.report.md` files in the same file picker action to expose direct artifact links. The explorer compares baseline and winner benchmark medians, MAD, and raw samples when those metrics exist in the run data.
 
 The sorting example includes a benchmark command that follows this protocol:
 

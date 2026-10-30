@@ -375,7 +375,8 @@
     <div class="container">
         <header>
             <h1><i class="fas fa-chart-line"></i> AlphaRevolve Run Explorer</h1>
-            <input type="file" id="fileInput" accept=".json" title="Select a run file to analyze">
+            <label for="fileInput">Select a run JSON and, optionally, its matching patch and report</label>
+            <input type="file" id="fileInput" accept=".json,.patch,.md" multiple title="Select run JSON and matching artifacts">
         </header>
 
         <main class="main-content">
@@ -402,6 +403,12 @@
                     <div id="metadataContent">
                         <p class="placeholder">Load a run file to view metadata.</p>
                     </div>
+                </div>
+
+                <div id="runEvidence" class="card">
+                    <h2><i class="fas fa-stopwatch"></i> Benchmark Evidence</h2>
+                    <div id="benchmarkContent"><p class="placeholder">Load a manifest-backed run to compare baseline and winner samples.</p></div>
+                    <div id="artifactContent" aria-live="polite"><p class="placeholder">Select the matching .patch and .report.md files with the run JSON to link them here.</p></div>
                 </div>
 
                 <div id="statistics" class="card">
@@ -431,11 +438,18 @@
          * Script for visualizing and exploring evolutionary program runs
          */
         (function() {
+            function escapeHtml(value) {
+                return String(value).replace(/[&<>"']/g, character => ({
+                    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+                })[character]);
+            }
+
             // Application state
             const app = {
                 programMapping: {}, // Map of program IDs to program objects
                 bestProgram: null,  // Reference to the best program in the run
-                currentProgram: null // Currently selected program
+                currentProgram: null, // Currently selected program
+                artifactUrls: []
             };
 
             // Initialize the application
@@ -447,14 +461,18 @@
              * Load and parse a JSON file
              */
             function loadFile(event) {
-                const file = event.target.files[0];
-                if (!file) return;
+                const files = Array.from(event.target.files || []);
+                const file = files.find(candidate => candidate.name.toLowerCase().endsWith('.json'));
+                if (!file) {
+                    alert('Select a run .json file. You can also select its matching .patch and .report.md files.');
+                    return;
+                }
 
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     try {
                         const data = JSON.parse(e.target.result);
-                        processAndDisplayData(data);
+                        processAndDisplayData(data, files, file);
                     } catch (error) {
                         alert('Error parsing JSON file.');
                         console.error('JSON parsing error:', error);
@@ -466,7 +484,13 @@
             /**
              * Process and display the run data
              */
-            function processAndDisplayData(data) {
+            function processAndDisplayData(data, selectedFiles = [], runFile = null) {
+                if (!data || !Array.isArray(data.programs) || data.programs.length === 0) {
+                    alert('The selected JSON does not contain any saved programs.');
+                    return;
+                }
+                app.artifactUrls.forEach(url => URL.revokeObjectURL(url));
+                app.artifactUrls = [];
                 console.log(`Processing run with ${data.programs.length} programs`);
 
                 // Process programs (normalize IDs and calculate improvements)
@@ -477,6 +501,8 @@
 
                 // Display all sections
                 displayMetadata(data);
+                displayBenchmarkEvidence(data);
+                displayRunArtifacts(data, selectedFiles, runFile);
                 displayPrograms(data.programs);
                 displayStatistics(data);
 
@@ -562,6 +588,59 @@
                     <p><i class="fas fa-brain"></i> <strong>Feedback LLM Model:</strong> ${data.metadata?.config?.feedbackLlmModel || 'N/A'}</p>
                     <p><i class="fas fa-stopwatch"></i> <strong>Runtime:</strong> ${data.metadata?.runtime || 'N/A'} ms</p>
                 `;
+            }
+
+            function displayBenchmarkEvidence(data) {
+                const baseline = data.programs.find(candidate => candidate.iteration === 0);
+                const winner = app.bestProgram;
+                const metricsFor = candidate => candidate?.fitness?.performanceMetrics?.benchmark;
+                const baselineMetrics = metricsFor(baseline);
+                const winnerMetrics = metricsFor(winner);
+                const content = document.getElementById('benchmarkContent');
+                if (!baselineMetrics && !winnerMetrics) {
+                    content.innerHTML = '<p class="placeholder">This run has no benchmark samples.</p>';
+                    return;
+                }
+                const show = metrics => {
+                    if (!metrics) return '<span>Not recorded</span>';
+                    const samples = Array.isArray(metrics.samplesMs)
+                        ? metrics.samplesMs.map(sample => Number(sample).toFixed(3)).join(', ')
+                        : 'Not recorded';
+                    const median = Number.isFinite(metrics.medianMs) ? `${metrics.medianMs.toFixed(3)} ms` : 'n/a';
+                    const mad = Number.isFinite(metrics.madMs) ? `${metrics.madMs.toFixed(3)} ms` : 'n/a';
+                    return `<div><strong>Median:</strong> ${median} &nbsp; <strong>MAD:</strong> ${mad}</div><div><strong>Samples (ms):</strong> ${samples}</div>`;
+                };
+                content.innerHTML = `
+                    <div style="display:grid;gap:12px">
+                        <div><strong>Baseline</strong><br>${show(baselineMetrics)}</div>
+                        <div><strong>Winner (iteration ${winner?.iteration ?? 'n/a'})</strong><br>${show(winnerMetrics)}</div>
+                    </div>`;
+            }
+
+            function displayRunArtifacts(data, selectedFiles, runFile) {
+                const content = document.getElementById('artifactContent');
+                const runId = data.metadata?.runId || runFile?.name.replace(/\.json$/i, '');
+                if (!runId) {
+                    content.innerHTML = '<p class="placeholder">This run has no run ID for matching artifacts.</p>';
+                    return;
+                }
+                const patch = selectedFiles.find(file => file.name === `${runId}.patch`);
+                const report = selectedFiles.find(file => file.name === `${runId}.report.md`);
+                const links = [];
+                if (patch) {
+                    const url = URL.createObjectURL(patch);
+                    app.artifactUrls.push(url);
+                    links.push(`<a href="${url}" download="${escapeHtml(patch.name)}">Download patch</a>`);
+                }
+                if (report) {
+                    const url = URL.createObjectURL(report);
+                    app.artifactUrls.push(url);
+                    links.push(`<a href="${url}" target="_blank" rel="noopener">Open report</a>`);
+                }
+                const missing = [!patch && 'patch', !report && 'report'].filter(Boolean);
+                content.innerHTML = links.length
+                    ? `<p>${links.join(' &nbsp; · &nbsp; ')}</p>${missing.length ? `<p class="placeholder">Select the matching ${missing.join(' and ')} file too to add its link.</p>` : ''}`
+                    : '<p class="placeholder">Select the matching .patch and .report.md files with the run JSON to link them here.</p>';
             }
 
             /**
@@ -705,9 +784,6 @@
                     }
                 }
 
-                const escapeHtml = value => String(value).replace(/[&<>"']/g, character => ({
-                    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-                })[character]);
                 const fileEntries = program.files && typeof program.files === 'object'
                     ? Object.entries(program.files)
                     : [];

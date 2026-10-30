@@ -8,6 +8,7 @@ import { BenchmarkRunner } from '../core/BenchmarkRunner';
 import { loadTaskManifest } from '../core/TaskManifest';
 import { ManifestEvaluator } from '../core/ManifestEvaluator';
 import { writeRunArtifacts } from '../core/RunArtifacts';
+import { inspectTask } from '../core/TaskPreflight';
 import * as process from 'process';
 import { randomBytes } from 'crypto';
 
@@ -34,10 +35,59 @@ loadLocalEnvFile(path.resolve(process.cwd(), '.env'));
 
 const program = new Command();
 
+function displayArgs(args: string[]): string {
+    const sensitive = /^(?:--?)(?:api[-_]?key|token|secret|password|passwd|authorization|auth)(?:=|$)/i;
+    const redactValue = (value: string) => {
+        if (/^(?:sk-[A-Za-z0-9_-]{8,}|Bearer\s+\S+)$/i.test(value)) return '[redacted]';
+        return value.replace(/([?&](?:api[-_]?key|token|secret|password)=)[^&\s]+/gi, '$1[redacted]');
+    };
+    return JSON.stringify(args.map((argument, index) => {
+        const equalsAt = argument.indexOf('=');
+        if (equalsAt > 0 && sensitive.test(argument.slice(0, equalsAt))) {
+            return `${argument.slice(0, equalsAt + 1)}[redacted]`;
+        }
+        if (sensitive.test(argument)) return argument;
+        if (index > 0 && sensitive.test(args[index - 1])) return '[redacted]';
+        return redactValue(argument);
+    }));
+}
+
 program
     .name('alpharevolve')
     .description('AI-powered evolutionary code optimizer')
     .version('1.0.0');
+
+program
+    .command('check')
+    .requiredOption('-c, --config <path>', 'Path to an alpharevolve.json optimization manifest')
+    .option('--unsandboxed', 'Check trusted commands without requiring an OS sandbox', false)
+    .description('Validate an optimization manifest without running commands or calling a model')
+    .action((options) => {
+        try {
+            const loaded = loadTaskManifest(options.config);
+            const checks = inspectTask(loaded, options.unsandboxed);
+            console.log(`Preflight for: ${loaded.config.goal}`);
+            for (const check of checks) {
+                console.log(`${check.passed ? 'PASS' : 'FAIL'} ${check.name}: ${check.detail}`);
+            }
+            const config = loaded.config;
+            console.log('\nRun settings:');
+            console.log(`  Project root: ${loaded.projectRoot}`);
+            console.log(`  Files: ${config.files.join(', ')}`);
+            console.log(`  Iterations: ${config.iterations}; evaluation repeats: ${config.evaluationRepeats}`);
+            console.log(`  Timeout: ${config.timeoutMs} ms`);
+            console.log(`  Benchmark: ${config.benchmark.warmupRuns} warmup(s), ${config.benchmark.sampleRuns} sample(s)`);
+            console.log(`  Score weights: quality ${config.scoreWeights.quality}, efficiency ${config.scoreWeights.efficiency}`);
+            console.log(`  Minimum improvement: ${config.minImprovement}; noise multiplier: ${config.noiseToleranceMultiplier}`);
+            console.log(`  Network: ${config.allowNetwork ? 'allowed by manifest' : 'denied'}`);
+            console.log(`  Correctness command: ${config.correctness.command} ${displayArgs(config.correctness.args)}`);
+            console.log(`  Benchmark command: ${config.benchmark.command} ${displayArgs(config.benchmark.args)}`);
+            if (checks.some(check => !check.passed)) global.process.exitCode = 1;
+        } catch (error) {
+            console.error(`Preflight failed: ${error instanceof Error ? error.message : String(error)}`);
+            global.process.exitCode = 1;
+        }
+    });
 
 program
     .command('optimize')

@@ -163,6 +163,16 @@ The repository includes [alpharevolve.example.json](alpharevolve.example.json) a
 
 To inspect a manifest-backed run in the HTML explorer, select its `runs/<runId>.json` file. Select the matching `.patch` and `.report.md` files in the same file picker action to expose direct artifact links. The explorer compares baseline and winner benchmark medians, MAD, and raw samples when those metrics exist in the run data.
 
+### Resume an interrupted run
+
+Pass the saved run database and the same manifest to continue from its best valid candidate:
+
+```sh
+npm run cli -- optimize --config alpharevolve.json --resume runs/run-2026-10-30_12-00-00-1234abcd.json --iterations 5
+```
+
+`--iterations` is the number of additional candidate iterations; if omitted, it uses the manifest's `iterations` value. The manifest must match the fingerprint saved when the run started. AlphaRevolve resumes the existing run ID, database, and event journal. If a journal exists, it is used to recover candidates recorded after the last JSON snapshot, and an incomplete final journal line is discarded. Runs created before manifest fingerprints were recorded cannot be resumed safely. The winner patch and report are refreshed under the same run ID.
+
 The sorting example includes a benchmark command that follows this protocol:
 
 ```bash

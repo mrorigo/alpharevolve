@@ -9,6 +9,7 @@ import { loadTaskManifest } from '../core/TaskManifest';
 import { ManifestEvaluator } from '../core/ManifestEvaluator';
 import { writeRunArtifacts } from '../core/RunArtifacts';
 import { inspectTask } from '../core/TaskPreflight';
+import { ProgramDatabase } from '../core/ProgramDatabase';
 import * as process from 'process';
 import { randomBytes } from 'crypto';
 
@@ -93,6 +94,7 @@ program
     .command('optimize')
     .argument('[targetFile]', 'Path to the file containing the code to optimize')
     .option('-c, --config <path>', 'Path to an alpharevolve.json optimization manifest')
+    .option('--resume <runFile>', 'Resume a saved manifest run from runs/<runId>.json')
     .option('-t, --test <testFile>', 'Path to the test file for verification')
     .option('-i, --iterations <number>', 'Number of iterations', '10')
     .option('-m, --model <string>', 'LLM Model to use', process.env.OPENAI_MODEL || 'gpt-3.5-turbo')
@@ -112,7 +114,7 @@ program
     .option('--api-key <string>', 'API Key (or set OPENAI_API_KEY env var)')
     .option('--base-url <string>', 'API Base URL (or set OPENAI_BASE_URL env var)')
     .description('Optimize a specific file using a test suite for feedback')
-    .action(async (targetFile, options) => {
+    .action(async (targetFile, options, command) => {
         try {
             if (options.config) {
                 if (targetFile) throw new Error('Do not pass a target file together with --config.');
@@ -120,7 +122,51 @@ program
                 const apiKey = options.apiKey || process.env.OPENAI_API_KEY;
                 if (!apiKey) throw new Error('API key is required. Use --api-key or set OPENAI_API_KEY.');
                 const baseUrl = options.baseUrl || process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
-                const runId = `run-${new Date().toISOString().replace(/[:.]/g, '-')}-${randomBytes(4).toString('hex')}`;
+                let database: ProgramDatabase | undefined;
+                let runId = `run-${new Date().toISOString().replace(/[:.]/g, '-')}-${randomBytes(4).toString('hex')}`;
+                let runFile: string;
+                if (options.resume) {
+                    const runsDirectory = fs.realpathSync(path.join(loaded.projectRoot, 'runs'));
+                    const requestedRunFile = fs.realpathSync(path.resolve(options.resume));
+                    const relativeRunFile = path.relative(runsDirectory, requestedRunFile);
+                    if (!relativeRunFile || relativeRunFile.startsWith(`..${path.sep}`) || path.isAbsolute(relativeRunFile)) {
+                        throw new Error(`Resume file must be inside ${runsDirectory}`);
+                    }
+                    if (!requestedRunFile.endsWith('.json') || !fs.statSync(requestedRunFile).isFile()) {
+                        throw new Error('Resume path must name a saved .json run database');
+                    }
+                    runFile = requestedRunFile;
+                    const journalFile = runFile.replace(/\.json$/i, '.jsonl');
+                    database = fs.existsSync(journalFile)
+                        ? await ProgramDatabase.loadFromJournal(journalFile)
+                        : await ProgramDatabase.loadFromFile(runFile);
+                    const savedManifestHash = database.getMetadata('manifestHash');
+                    if (!savedManifestHash) {
+                        throw new Error('This run has no manifest fingerprint and cannot be resumed safely. Start a new run to enable resume.');
+                    }
+                    if (savedManifestHash !== loaded.manifestHash) {
+                        throw new Error('The manifest has changed since this run was saved; resume requires an exact manifest match.');
+                    }
+                    const savedRunId = database.getMetadata('runId');
+                    if (typeof savedRunId !== 'string' || path.basename(runFile) !== `${savedRunId}.json`) {
+                        throw new Error('Saved run ID does not match the resume filename.');
+                    }
+                    runId = savedRunId;
+                } else {
+                    runFile = path.join(loaded.projectRoot, 'runs', `${runId}.json`);
+                }
+                const explicitIterations = command.getOptionValueSource('iterations') === 'cli';
+                const additionalIterations = options.resume && explicitIterations
+                    ? Number(options.iterations)
+                    : loaded.config.iterations;
+                if (!Number.isInteger(additionalIterations) || additionalIterations < 1) {
+                    throw new Error('Resume iteration count must be a positive integer.');
+                }
+                const savedConfig = database?.getMetadata('config');
+                const modelWasProvided = command.getOptionValueSource('model') === 'cli';
+                const model = options.resume && !modelWasProvided && typeof savedConfig?.llmModel === 'string'
+                    ? savedConfig.llmModel
+                    : options.model;
                 const primaryFile = loaded.config.files[0];
                 const initialSolution = loaded.initialFiles[primaryFile];
                 const config: EvolutionConfig = {
@@ -129,20 +175,21 @@ program
                     primaryFile,
                     evaluator: new ManifestEvaluator(loaded, !options.unsandboxedTests),
                     problemDescription: loaded.config.goal,
-                    iterations: loaded.config.iterations,
+                    iterations: additionalIterations,
                     evaluationRepeats: loaded.config.evaluationRepeats,
                     minImprovement: loaded.config.minImprovement,
                     noiseToleranceMultiplier: loaded.config.noiseToleranceMultiplier,
                     scoreWeights: loaded.config.scoreWeights,
-                    llmModel: options.model,
+                    llmModel: model,
                     temperature: 0.7,
                     promptTemplate: `# Optimization goal\n{PROBLEM_DESCRIPTION}\n\n# Complete current file snapshot\n{CURRENT_SOLUTION}\n\n# Evaluation results\n{PERFORMANCE_INFO}\n\n# Prior feedback\n{PREVIOUS_FEEDBACK}\n\nReturn the complete updated snapshot as one JSON object with a "files" object. Preserve every configured file path.`,
                     feedbackEnabled: true,
-                    databaseOptions: { saveEnabled: true, savePath: path.join(loaded.projectRoot, 'runs', `${runId}.json`) },
+                    runMetadata: { manifestHash: loaded.manifestHash },
+                    databaseOptions: { saveEnabled: true, savePath: runFile },
                 };
                 const evolver = new AlphaRevolve(config, baseUrl, apiKey, {
-                    verbose: true, saveResults: true, checkSyntaxBeforeEval: false, runId,
-                });
+                    verbose: true, saveResults: true, checkSyntaxBeforeEval: false, runId, resume: Boolean(options.resume),
+                }, database);
                 const result = await evolver.run();
                 const baseline = result.allCandidates.find(candidate => candidate.iteration === 0);
                 if (!baseline) throw new Error('Run completed without a persisted baseline candidate');
@@ -151,6 +198,7 @@ program
                 console.log(`Report: ${artifacts.reportPath}`);
                 return;
             }
+            if (options.resume) throw new Error('--resume is only supported with --config for manifest-backed runs.');
             if (!targetFile) throw new Error('Provide a target file or use --config alpharevolve.json.');
             const absoluteTarget = path.resolve(targetFile);
             if (!fs.existsSync(absoluteTarget)) {

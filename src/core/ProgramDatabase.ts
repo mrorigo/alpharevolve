@@ -44,13 +44,49 @@ export class ProgramDatabase {
   }
 
   /** Start an append-only journal. Existing journals are never silently reused. */
-  configureEventJournal(filePath: string): void {
+  configureEventJournal(filePath: string, resumeExisting = false): void {
     const absolutePath = path.resolve(filePath);
     fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
-    if (fs.existsSync(absolutePath) && fs.statSync(absolutePath).size > 0) {
+    const hasExistingJournal = fs.existsSync(absolutePath) && fs.statSync(absolutePath).size > 0;
+    if (hasExistingJournal && !resumeExisting) {
       throw new Error(`Event journal already exists: ${absolutePath}`);
     }
     this.eventJournalPath = absolutePath;
+    if (hasExistingJournal && resumeExisting) {
+      const journal = fs.readFileSync(absolutePath, 'utf8');
+      if (!journal.endsWith('\n')) {
+        const lastCompleteLine = journal.lastIndexOf('\n');
+        const trailingLine = journal.slice(lastCompleteLine + 1);
+        let trailingEventIsComplete = false;
+        try {
+          JSON.parse(trailingLine);
+          trailingEventIsComplete = true;
+        } catch {
+          // A torn final event is discarded below; complete earlier lines remain intact.
+        }
+        if (trailingEventIsComplete) {
+          fs.appendFileSync(absolutePath, '\n', 'utf8');
+        } else if (lastCompleteLine < 0) {
+          fs.truncateSync(absolutePath, 0);
+          this.eventJournalPath = undefined;
+          this.configureEventJournal(absolutePath);
+          return;
+        } else {
+          fs.truncateSync(absolutePath, Buffer.byteLength(journal.slice(0, lastCompleteLine + 1), 'utf8'));
+        }
+      }
+      this.appendEvent({ type: 'journal_resumed', version: this.dbVersion });
+      this.appendEvent({
+        type: 'selection_configured',
+        options: {
+          higherIsBetter: this.higherIsBetter,
+          minImprovement: this.minImprovement,
+          noiseToleranceMultiplier: this.noiseToleranceMultiplier,
+        },
+        bestProgramId: this.bestProgramId,
+      });
+      return;
+    }
     this.appendEvent({ type: 'journal_started', version: this.dbVersion });
     this.appendEvent({
       type: 'selection_configured',
@@ -322,6 +358,11 @@ export class ProgramDatabase {
     this.metadata[key] = value;
   }
 
+  deleteMetadata(key: string): void {
+    this.appendEvent({ type: 'metadata_deleted', key });
+    delete this.metadata[key];
+  }
+
   /**
    * Retrieves metadata by key
    * @param key Metadata key
@@ -465,12 +506,14 @@ export class ProgramDatabase {
         db.bestProgramId = event.bestProgramId ?? null;
       } else if (event.type === 'metadata_set') {
         db.metadata[event.key] = event.value;
+      } else if (event.type === 'metadata_deleted') {
+        delete db.metadata[event.key];
       } else if (event.type === 'candidate_added') {
         const candidate = event.candidate as CandidateSolution;
         candidate.timestamp = new Date(candidate.timestamp);
         db.programs.set(candidate.id, candidate);
         db.bestProgramId = event.bestProgramId ?? null;
-      } else if (event.type !== 'journal_started') {
+      } else if (event.type !== 'journal_started' && event.type !== 'journal_resumed') {
         throw new Error(`Unknown event journal type on line ${index + 1}: ${String(event.type)}`);
       }
     }

@@ -130,6 +130,8 @@ export interface EvolutionOptions {
   checkSyntaxBeforeEval: boolean;
   /** Custom run ID for tracking/persistence */
   runId?: string;
+  /** Resume a populated evaluation database instead of evaluating a new baseline. */
+  resume?: boolean;
 }
 
 /**
@@ -144,6 +146,9 @@ interface EvolutionConfigBase {
 
   /** Primary file path for snapshot evaluators. */
   primaryFile?: string;
+
+  /** Additional non-secret run metadata to persist for recovery and inspection. */
+  runMetadata?: Record<string, unknown>;
 
   /**
    * Optional system prompt for LLM behavior customization during code generation.

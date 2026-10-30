@@ -166,7 +166,10 @@ export class AlphaRevolve {
 
     if (this.options.saveResults && this.config.databaseOptions?.saveEnabled !== false) {
       const snapshotPath = this.getDatabasePath();
-      this.evaluationDatabase.configureEventJournal(snapshotPath.replace(/\.json$/i, '.jsonl'));
+      this.evaluationDatabase.configureEventJournal(
+        snapshotPath.replace(/\.json$/i, '.jsonl'),
+        this.options.resume === true
+      );
     }
 
     // Initialize database with metadata
@@ -180,7 +183,9 @@ export class AlphaRevolve {
   private initializeDatabase(): void {
     this.evaluationDatabase.setMetadata('problemDescription', this.config.problemDescription);
     this.evaluationDatabase.setMetadata('runId', this.runId);
-    this.evaluationDatabase.setMetadata('startTime', new Date().toISOString());
+    if (!this.evaluationDatabase.getMetadata('startTime')) {
+      this.evaluationDatabase.setMetadata('startTime', new Date().toISOString());
+    }
     this.evaluationDatabase.setMetadata('config', {
       iterations: this.config.iterations,
       llmModel: this.config.llmModel,
@@ -193,6 +198,14 @@ export class AlphaRevolve {
       feedbackLlmModel: this.config.feedbackLlmModel,
     });
     this.evaluationDatabase.setMetadata('options', this.options);
+    for (const [key, value] of Object.entries(this.config.runMetadata || {})) {
+      this.evaluationDatabase.setMetadata(key, value);
+    }
+    if (this.options.resume) {
+      for (const key of ['runtime', 'endTime', 'error', 'errorTime']) this.evaluationDatabase.deleteMetadata(key);
+      const previousResumeCount = Number(this.evaluationDatabase.getMetadata('resumeCount')) || 0;
+      this.evaluationDatabase.setMetadata('resumeCount', previousResumeCount + 1);
+    }
   }
 
   private async evaluateSolution(solution: string, files?: Record<string, string>): Promise<{
@@ -395,10 +408,11 @@ export class AlphaRevolve {
   private async runIteration(
     iteration: number,
     parentCandidate: CandidateSolution,
-    filterOptions?: FilterOptions
+    filterOptions?: FilterOptions,
+    runIterationIndex = iteration
   ): Promise<CandidateSolution | null> {
     if (this.options.verbose) {
-      console.log(`\n🔄 Iteration ${iteration + 1}/${this.config.iterations}`);
+      console.log(`\n🔄 Iteration ${runIterationIndex + 1}/${this.config.iterations}`);
       console.log(`Parent candidate ID: ${parentCandidate.id}`);
     }
 
@@ -562,34 +576,52 @@ export class AlphaRevolve {
 
     try {
       this.display.displaySection('Starting AlphaEvolve');
-      this.display.displaySuccess('Evaluating initial solution...');
+      let firstGlobalIteration = 0;
+      if (this.options.resume) {
+        const candidates = this.evaluationDatabase.getAllPrograms();
+        if (candidates.length === 0) throw new Error('Cannot resume a run with no saved candidates');
+        const bestCandidate = this.evaluationDatabase.getBestProgram();
+        if (!bestCandidate) throw new Error('Cannot resume: saved run has no valid candidate');
+        if (this.config.initialFiles) {
+          const expectedPaths = Object.keys(this.config.initialFiles).sort();
+          const savedPaths = Object.keys(bestCandidate.files || {}).sort();
+          if (JSON.stringify(expectedPaths) !== JSON.stringify(savedPaths)) {
+            throw new Error('Cannot resume: best saved candidate does not match the manifest file set');
+          }
+        }
+        firstGlobalIteration = Math.max(...candidates.map(candidate => candidate.iteration));
+        this.display.displaySuccess(
+          `Resuming from candidate iteration ${firstGlobalIteration} for ${this.config.iterations} additional iteration(s)...`
+        );
+        this.display.displayFitnessMetrics(bestCandidate.fitness);
+      } else {
+        this.display.displaySuccess('Evaluating initial solution...');
 
-      // Evaluate the initial solution
-      const initialResult = await this.evaluateSolution(this.config.initialSolution, this.config.initialFiles);
+        const initialResult = await this.evaluateSolution(this.config.initialSolution, this.config.initialFiles);
+        this.evaluationDatabase.addProgram(
+          this.config.initialSolution,
+          initialResult.fitness,
+          0,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          initialResult.evaluation,
+          this.config.initialFiles,
+          this.config.primaryFile
+        );
 
-      // Add initial solution to the database
-      this.evaluationDatabase.addProgram(
-        this.config.initialSolution,
-        initialResult.fitness,
-        0,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        initialResult.evaluation,
-        this.config.initialFiles,
-        this.config.primaryFile
-      );
-
-      this.display.displayFitnessMetrics(initialResult.fitness);
-      if (initialResult.evaluation.status === 'invalid') {
-        throw new Error(`Initial solution is invalid: ${initialResult.evaluation.reason}`);
+        this.display.displayFitnessMetrics(initialResult.fitness);
+        if (initialResult.evaluation.status === 'invalid') {
+          throw new Error(`Initial solution is invalid: ${initialResult.evaluation.reason}`);
+        }
       }
 
       // Run the evolution for specified iterations
       this.display.initProgressBar(this.config.iterations);
-      for (let i = 0; i < this.config.iterations; i++) {
-        this.display.updateProgressBar(i + 1);
+      for (let runIterationIndex = 0; runIterationIndex < this.config.iterations; runIterationIndex++) {
+        const globalIteration = firstGlobalIteration + runIterationIndex;
+        this.display.updateProgressBar(runIterationIndex + 1);
         const parentCandidate = this.evaluationDatabase.getBestProgram();
         if (!parentCandidate) {
           throw new Error('No candidate solution available');
@@ -604,16 +636,16 @@ export class AlphaRevolve {
             console.log(`Retry ${retries}/${this.options.maxRetries}...`);
           }
 
-          childCandidate = await this.runIteration(i, parentCandidate);
+          childCandidate = await this.runIteration(globalIteration, parentCandidate, undefined, runIterationIndex);
           retries++;
         }
 
         // Save progress if configured to do so
         if ((this.config.databaseOptions || {}).saveFrequency === 'iteration') {
           if (this.options.verbose) {
-            console.log(`🔄 Database save triggered for iteration ${i + 1}`);
+            console.log(`🔄 Database save triggered for iteration ${globalIteration + 1}`);
           }
-          await this.saveDatabaseIfEnabled(`iteration ${i + 1}`);
+          await this.saveDatabaseIfEnabled(`iteration ${globalIteration + 1}`);
         } else if (this.options.verbose) {
           console.log(`⏭️ Iteration save skipped - saveFrequency: ${(this.config.databaseOptions || {}).saveFrequency}`);
         }

@@ -26,9 +26,13 @@ const DEFAULT_RETRY_OPTIONS: RetryOptions = {
     'rate_limit_exceeded',
     '429',
     'timeout',
+    'timed out',
     'server_error',
     '5',
-    'connection'
+    'connection',
+    // An empty/short response (e.g. reasoning models exhausting the token
+    // budget before emitting content) is a transient, idempotent failure.
+    'empty or very short response'
   ]
 };
 
@@ -37,6 +41,12 @@ const DEFAULT_RETRY_OPTIONS: RetryOptions = {
  * It handles retries, error normalization, and provides consistent interfaces
  * regardless of the underlying LLM provider.
  */
+
+/** Cap a diagnostic string so error logs never explode into megabytes. */
+function truncate(text: string, maxChars: number): string {
+  return text.length <= maxChars ? text : `${text.slice(0, maxChars)}… (truncated, total ${text.length} chars)`;
+}
+
 export class LlmService {
   private readonly openai: OpenAI;
   private readonly retryOptions: RetryOptions;
@@ -51,7 +61,9 @@ export class LlmService {
     this.openai = new OpenAI({
       baseURL,
       apiKey,
-      timeout: 60000, // 60 second timeout
+      // Reasoning-capable models can easily exceed one minute while thinking;
+      // the previous 60s cap aborted long generations mid-flight.
+      timeout: 600000, // 10 minutes
     });
 
     // Merge default options with any provided options
@@ -98,11 +110,13 @@ export class LlmService {
     prompt: string,
     model: string,
     temperature = 0.7,
-    maxTokens = 2048,
+    maxTokens = 32768,
     systemPrompt?: string
   ): Promise<string> {
     let retries = 0;
     let delay = this.retryOptions.initialDelayMs;
+    let rawResponse: any;
+    Logger.info(`LLM request: model=${model} promptChars=${prompt.length} maxTokens=${maxTokens} temperature=${temperature}`);
 
     while (true) {
       try {
@@ -117,10 +131,18 @@ export class LlmService {
           temperature,
           max_tokens: maxTokens,
         } as any);
+        rawResponse = response;
 
-        const generated = response.choices[0]?.message?.content || '';
+        const choice = response.choices?.[0] as any;
+        const generated = choice?.message?.content || '';
+        const reasoningText = choice?.message?.reasoning || choice?.message?.reasoning_content || '';
+        // Compact always-on metadata line: reveals whether reasoning consumed
+        // the token budget (finish_reason=length, empty content) or something
+        // else went wrong server-side.
+        Logger.info(`LLM response meta: model=${model} finishReason=${choice?.finish_reason ?? 'unknown'} contentChars=${generated.length} reasoningChars=${reasoningText.length} usage=${response?.usage ? JSON.stringify(response.usage) : 'n/a'}`);
 
         if (!generated || generated.trim().length < 10) {
+          Logger.error(`LLM returned empty or very short response. Raw response (truncated to 6k chars): ${truncate(JSON.stringify(rawResponse, null, 2), 6000)}`);
           throw new Error('LLM returned empty or very short response');
         }
 

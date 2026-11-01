@@ -19,6 +19,8 @@ export interface TaskManifest {
   minImprovement: number;
   noiseToleranceMultiplier: number;
   scoreWeights: { quality: number; efficiency: number };
+  /** 'absolute' (default): efficiency = 1000/(1000+medianMs). 'relative': efficiency = baseline/(baseline+medianMs), anchored to the run's first evaluated candidate. */
+  scoreMode?: 'absolute' | 'relative';
   allowNetwork: boolean;
   sandbox: boolean;
 }
@@ -144,6 +146,10 @@ export function loadTaskManifest(manifestPath: string): LoadedTaskManifest {
   if (scoreWeights.quality + scoreWeights.efficiency <= 0) {
     throw new Error('At least one score weight must be positive');
   }
+  const scoreMode = parsed.scoreMode ?? 'absolute';
+  if (scoreMode !== 'absolute' && scoreMode !== 'relative') {
+    throw new Error('scoreMode must be "absolute" or "relative"');
+  }
   if (parsed.allowNetwork !== undefined && typeof parsed.allowNetwork !== 'boolean') {
     throw new Error('allowNetwork must be a boolean');
   }
@@ -163,6 +169,7 @@ export function loadTaskManifest(manifestPath: string): LoadedTaskManifest {
     minImprovement: nonNegativeNumber(parsed.minImprovement, 'minImprovement', 0),
     noiseToleranceMultiplier: nonNegativeNumber(parsed.noiseToleranceMultiplier, 'noiseToleranceMultiplier', 1),
     scoreWeights,
+    scoreMode,
     allowNetwork: parsed.allowNetwork ?? false,
     sandbox: parsed.sandbox ?? true,
   };

@@ -61,9 +61,11 @@ export class PromptBuilder {
       }
     }
 
-    const previousFeedback = candidate.feedback
-      ? `Previous Feedback:\n${candidate.feedback}\n\nConsider all previous feedback when proposing improvements.`
-      : "";
+    // The prompt template supplies the "# Prior feedback" section header, so
+    // emit the feedback text itself — no duplicated "Previous Feedback:"
+    // sub-header, and the system prompt already carries the "consider all
+    // previous feedback" instruction.
+    const previousFeedback = candidate.feedback ?? "";
 
     return this.formatPromptTemplate(config.promptTemplate, {
       PROBLEM_DESCRIPTION: config.problemDescription,

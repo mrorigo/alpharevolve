@@ -124,10 +124,10 @@ export class AlphaRevolve {
     this.config = {
       ...config,
       temperature: config.temperature ?? 0.7,
-      maxTokens: config.maxTokens ?? 4096,
+      maxTokens: config.maxTokens ?? 32768,
       feedbackEnabled: config.feedbackEnabled !== false,
       feedbackTemperature: config.feedbackTemperature ?? 0.5,
-      feedbackMaxTokens: config.feedbackMaxTokens ?? 2048,
+      feedbackMaxTokens: config.feedbackMaxTokens ?? 16384,
       higherIsBetter: config.higherIsBetter ?? true,
       evaluationRepeats: config.evaluationRepeats ?? 1,
       minImprovement: config.minImprovement ?? 0,

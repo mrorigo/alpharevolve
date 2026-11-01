@@ -51,6 +51,8 @@ Use markdown formatting.
     this.openai = new OpenAI({
       baseURL,
       apiKey,
+      // Reasoning models can take several minutes; avoid aborting mid-flight.
+      timeout: 600000, // 10 minutes
     });
   }
 
@@ -220,6 +222,10 @@ Raw metrics: ${JSON.stringify(metrics, null, 2)}
       } as any);
 
       let generatedText = response.choices[0]?.message?.content || '';
+      const choice = response.choices[0] as any;
+      const reasoningText = choice?.message?.reasoning || choice?.message?.reasoning_content || '';
+      // Always-on metadata: diagnose reasoning-model token budgeting.
+      Logger.info(`Feedback meta: model=${model} finishReason=${choice?.finish_reason ?? 'unknown'} contentChars=${generatedText.length} reasoningChars=${reasoningText.length} usage=${response?.usage ? JSON.stringify(response.usage) : 'n/a'}`);
 
       // Clean up the response
       generatedText = generatedText
@@ -227,7 +233,7 @@ Raw metrics: ${JSON.stringify(metrics, null, 2)}
         .trim();
 
       if (generatedText.length < 10) {
-        Logger.error(`Feedback too short: "${generatedText}"`);
+        Logger.error(`Feedback too short (contentChars=${generatedText.length}). Raw response (truncated to 6k chars): ${JSON.stringify(response, null, 2).slice(0, 6000)}`);
         throw new Error("Generated feedback is too short or empty");
       }
 

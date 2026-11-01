@@ -77,6 +77,7 @@ program
             console.log(`  Timeout: ${config.timeoutMs} ms`);
             console.log(`  Benchmark: ${config.benchmark.warmupRuns} warmup(s), ${config.benchmark.sampleRuns} sample(s)`);
             console.log(`  Score weights: quality ${config.scoreWeights.quality}, efficiency ${config.scoreWeights.efficiency}`);
+            console.log(`  Score mode: ${config.scoreMode} (efficiency formula)`);
             console.log(`  Minimum improvement: ${config.minImprovement}; noise multiplier: ${config.noiseToleranceMultiplier}`);
             console.log(`  Network: ${config.allowNetwork ? 'allowed by manifest' : 'denied'}`);
             console.log(`  Sandbox: ${config.sandbox ? 'enabled' : 'disabled by manifest'}`);
@@ -153,11 +154,23 @@ program
                 : options.model;
             const primaryFile = loaded.config.files[0];
             const initialSolution = loaded.initialFiles[primaryFile];
+            const evaluator = new ManifestEvaluator(loaded);
+            // Relative scoring must keep one anchor across restarts: restore it
+            // from the saved run's baseline candidate (iteration 0).
+            if (database) {
+                const savedBaseline = database.getAllPrograms()
+                    .sort((a, b) => (a.iteration ?? 0) - (b.iteration ?? 0))[0];
+                const savedBaselineMedian = savedBaseline?.fitness?.performanceMetrics?.benchmark?.medianMs;
+                if (typeof savedBaselineMedian === 'number' && Number.isFinite(savedBaselineMedian)) {
+                    evaluator.setBaselineMedianMs(savedBaselineMedian);
+                    console.log(`Relative score anchor restored from run: ${savedBaselineMedian} ms`);
+                }
+            }
             const config: EvolutionConfig = {
                 initialSolution,
                 initialFiles: loaded.initialFiles,
                 primaryFile,
-                evaluator: new ManifestEvaluator(loaded),
+                evaluator,
                 problemDescription: loaded.config.goal,
                 iterations: additionalIterations,
                 evaluationRepeats: loaded.config.evaluationRepeats,

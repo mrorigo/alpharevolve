@@ -68,7 +68,43 @@ function readNodeResourceMetrics(workspace: EvaluationWorkspace): Pick<Performan
 export class ManifestEvaluator implements CandidateSnapshotEvaluator {
   readonly candidateType = 'snapshot' as const;
 
+  /** Run-wide anchor median (ms) for relative scoring; injected on resume or captured from the first benchmark. */
+  private baselineMedianMs: number | null = null;
+
   constructor(private readonly loaded: LoadedTaskManifest) {}
+
+  /**
+   * Restores the relative-scoring anchor when resuming a run, so post-restart
+   * scores stay on the same scale as the ones already saved. Expected to be
+   * the baseline candidate's recorded benchmark median.
+   */
+  setBaselineMedianMs(medianMs: number): void {
+    if (!Number.isFinite(medianMs) || medianMs < 0) {
+      throw new Error('Baseline median must be a finite, non-negative duration');
+    }
+    this.baselineMedianMs = medianMs;
+  }
+
+  /**
+   * Efficiency scoring.
+   * - 'absolute' (default, legacy): 1000/(1000+medianMs). Meaningful spread only
+   *   for slow workloads; saturates near 1.0 for few-millisecond benchmarks.
+   * - 'relative': baseline/(baseline+medianMs) with the anchor at parity=0.5.
+   *   A candidate as fast as the baseline scores 0.5; 2× faster scores 0.667;
+   *   the resolution survives fast benchmarks while staying in [0, 1).
+   */
+  private scoreEfficiency(medianMs: number): { efficiencyScore: number; baselineMedianMs: number | null } {
+    if (this.loaded.config.scoreMode === 'relative') {
+      let baseline = this.baselineMedianMs;
+      if (baseline === null) {
+        // First benchmark of the process becomes the anchor (parity = 0.5).
+        baseline = medianMs;
+        this.baselineMedianMs = medianMs;
+      }
+      return { efficiencyScore: baseline / (baseline + medianMs), baselineMedianMs: baseline };
+    }
+    return { efficiencyScore: 1000 / (1000 + medianMs), baselineMedianMs: null };
+  }
 
   async evaluate(candidate: CandidateSnapshot): Promise<FitnessFunctionResult> {
     const { config, projectRoot } = this.loaded;
@@ -97,15 +133,19 @@ export class ManifestEvaluator implements CandidateSnapshotEvaluator {
       }
 
       const qualityScore = 1;
-      const efficiencyScore = 1000 / (1000 + benchmark.medianMs);
+      const { efficiencyScore, baselineMedianMs } = this.scoreEfficiency(benchmark.medianMs);
       const { quality, efficiency } = config.scoreWeights;
       const totalWeight = quality + efficiency;
       const finalScore = (qualityScore * quality + efficiencyScore * efficiency) / totalWeight;
-      const sampleScores = benchmark.samplesMs.map(sampleMs =>
-        (qualityScore * quality + (1000 / (1000 + sampleMs)) * efficiency) / totalWeight
+      const sampleEfficience = benchmark.samplesMs.map(sampleMs => this.scoreEfficiency(sampleMs).efficiencyScore);
+      const sampleScores = benchmark.samplesMs.map((_, index) =>
+        (qualityScore * quality + sampleEfficience[index] * efficiency) / totalWeight
       );
       const sampleMedian = median(sampleScores);
       benchmark.finalScoreMad = median(sampleScores.map(score => Math.abs(score - sampleMedian)));
+      if (baselineMedianMs !== null && baselineMedianMs !== undefined) {
+        benchmark.baselineMedianMs = baselineMedianMs;
+      }
 
       const metrics: PerformanceMetrics = {
         executionTime: correctnessCheckTimeMs,

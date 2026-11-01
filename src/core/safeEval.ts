@@ -15,6 +15,8 @@ export interface PerformanceMetrics {
     madMs: number;
     warmupRuns: number;
     finalScoreMad?: number;
+    /** Anchor median the efficiency score was computed against (relative score mode). */
+    baselineMedianMs?: number;
   };
   memoryUsage: { before: NodeJS.MemoryUsage; after: NodeJS.MemoryUsage; delta: NodeJS.MemoryUsage };
   cpuUsage: { user: number; system: number };

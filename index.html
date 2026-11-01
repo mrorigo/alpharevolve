@@ -786,7 +786,7 @@
             <span id="navLoadedHint">No run loaded — drop files or press Load</span>
         </div>
         <div class="card-tools">
-            <input type="file" id="fileInput" accept=".json,.patch,.md" multiple hidden>
+            <input type="file" id="fileInput" accept=".json,.jsonl,.patch,.md" multiple hidden>
             <button class="btn btn-primary" id="loadBtn"><i class="fas fa-folder-open"></i> Load run</button>
         </div>
     </nav>
@@ -811,7 +811,7 @@
                 <text x="296" y="19" fill="#fff" font-family="sans-serif" font-size="9" font-weight="bold">BEST</text>
             </svg>
             <h1>Explore the <span class="text-gradient">Evolution</span> of Your Programs</h1>
-            <p class="sub">Load an AlphaRevolve run snapshot to inspect its lineage tree, fitness landscape, benchmark evidence, prompts, feedback, and metrics.</p>
+            <p class="sub">Load an AlphaRevolve run snapshot (runs/&lt;runId&gt;.json) — or a crashed run's event journal (.jsonl) — to inspect its lineage tree, fitness landscape, benchmark evidence, prompts, feedback, and metrics.</p>
             <button class="btn btn-primary" id="loadBtn2" style="font-size:1rem; padding:.9rem 2.2rem;"><i class="fas fa-dna"></i> Select a run JSON</button>
             <p class="drop-hint">…or drag &amp; drop files here. Add the matching <kbd>.patch</kbd> and <kbd>.report.md</kbd> to link artifacts.</p>
         </section>
@@ -916,7 +916,7 @@
         </section>
 
         <footer>
-            <p>AlphaRevolve Run Explorer — visualize program evolution. Load <code style="font-family:var(--font-mono);font-size:.7rem">runs/&lt;runId&gt;.json</code> from a completed optimization.</p>
+            <p>AlphaRevolve Run Explorer — visualize program evolution. Load <code style="font-family:var(--font-mono);font-size:.7rem">runs/&lt;runId&gt;.json</code> (or the run's <code style="font-family:var(--font-mono);font-size:.7rem">.jsonl</code> journal) to inspect a run.</p>
         </footer>
     </main>
 
@@ -968,8 +968,16 @@
                 },
                 pct: v => {
                     if (!Number.isFinite(v)) return '—';
+                    // Adaptive: tiny deltas (sub-0.05%) need extra decimals to
+                    // stay visible instead of collapsing to "+0.0%".
+                    const dec = (v !== 0 && Math.abs(v) < 0.05) ? 3 : 1;
                     const s = v >= 0 ? '+' : '−';
-                    return s + Math.abs(v).toFixed(1) + '%';
+                    return s + Math.abs(v).toFixed(dec) + '%';
+                },
+                pctRaw: v => {
+                    if (!Number.isFinite(v)) return '—';
+                    const dec = (v !== 0 && Math.abs(v) < 0.05) ? 3 : 1;
+                    return Math.abs(v).toFixed(dec) + '%';
                 },
                 shortId: id => typeof id === 'string' && id.length > 8 ? id.slice(0, 8) + '…' : id
             };
@@ -1013,6 +1021,7 @@
                 listFilter: 'all',
                 listSearch: '',
                 listSort: 'iteration',   // 'iteration' | 'score'
+                scoreDec: 2,             // adaptive score decimals (set per run)
                 activeTab: 'code',
                 codeView: 'code',        // 'code' | 'diff'
                 currentProgram: null
@@ -1052,24 +1061,87 @@
 
             function loadRunFiles(files) {
                 if (!files.length) return;
-                const runFile = files.find(f => f.name.toLowerCase().endsWith('.json'));
+                // Prefer the JSON snapshot; fall back to a standalone event
+                // journal (.jsonl) — e.g. runs that crashed before saving.
+                const runFile = files.find(f => f.name.toLowerCase().endsWith('.json'))
+                    || files.find(f => f.name.toLowerCase().endsWith('.jsonl'));
                 if (!runFile) {
-                    showError('No run JSON selected. Select the snapshot file (for example runs/<runId>.json); its .patch/.report.md artifacts are optional extras.');
+                    showError('No run JSON selected. Select the snapshot file (for example runs/<runId>.json) or its event journal (.jsonl); .patch/.report.md artifacts are optional extras.');
                     return;
                 }
                 clearError();
                 const reader = new FileReader();
                 reader.onload = e => {
                     try {
-                        const data = JSON.parse(e.target.result);
+                        const isJournal = /\.jsonl$/i.test(runFile.name);
+                        const data = isJournal ? parseJournal(String(e.target.result)) : JSON.parse(e.target.result);
                         processAndDisplayData(data, files, runFile);
                     } catch (err) {
-                        console.error('JSON parsing error:', err);
+                        console.error('Run file parsing error:', err);
                         showError(`Could not parse "${runFile.name}": ${err.message}`);
                     }
                 };
                 reader.onerror = () => showError(`Could not read "${runFile.name}".`);
                 reader.readAsText(runFile);
+            }
+
+            /**
+             * Rebuild a run snapshot from a ProgramDatabase event journal
+             * (.jsonl). Mirrors ProgramDatabase.loadFromJournal semantics:
+             * candidate_added → programs, metadata_set → metadata,
+             * selection_configured → options/bestProgramId. A torn final
+             * line (crash mid-write) is tolerated like the CLI does.
+             */
+            function parseJournal(text) {
+                const lines = text.split('\n');
+                if (lines.length && lines[lines.length - 1] === '') lines.pop();
+                const programs = [];
+                const metadata = {};
+                let options = null;
+                let bestProgramId = null;
+                let version = null;
+                let startedAt = null;
+                for (let index = 0; index < lines.length; index++) {
+                    const line = lines[index];
+                    if (!line.trim()) continue;
+                    let event;
+                    try {
+                        event = JSON.parse(line);
+                    } catch (error) {
+                        if (index === lines.length - 1) {
+                            console.warn('Ignoring incomplete final journal line');
+                            break;
+                        }
+                        throw new Error(`Invalid event journal line ${index + 1}`);
+                    }
+                    switch (event.type) {
+                        case 'journal_started':
+                        case 'journal_resumed':
+                            version = event.version ?? version;
+                            startedAt = startedAt ?? event.at ?? null;
+                            break;
+                        case 'selection_configured':
+                            if (event.options) options = event.options;
+                            if (event.bestProgramId != null) bestProgramId = event.bestProgramId;
+                            break;
+                        case 'metadata_set':
+                            metadata[event.key] = event.value;
+                            break;
+                        case 'metadata_deleted':
+                            delete metadata[event.key];
+                            break;
+                        case 'candidate_added':
+                            if (event.candidate) programs.push(event.candidate);
+                            if (event.bestProgramId != null) bestProgramId = event.bestProgramId;
+                            break;
+                        default:
+                            console.warn(`Unknown journal event type on line ${index + 1}: ${event.type}`);
+                            break;
+                    }
+                }
+                if (options) metadata.options = options;
+                if (bestProgramId != null) metadata.bestProgramId = bestProgramId;
+                return { version: version ?? undefined, timestamp: startedAt ?? undefined, programs, metadata };
             }
 
             /* Drag & drop */
@@ -1164,6 +1236,13 @@
                 processPrograms(data.programs);
                 pickBaseline();
                 pickBest();
+                // Adaptive score precision: when every finalScore sits inside a
+                // narrow band (e.g. the 1000/(1000+ms) efficiency curve saturates
+                // on fast workloads), two decimals would render everything as
+                // 1.00. Widen decimals just enough to separate the candidates.
+                const allScores = state.programs.map(p => p.fitness?.finalScore).filter(Number.isFinite);
+                const scoreSpread = allScores.length ? Math.max(...allScores) - Math.min(...allScores) : 1;
+                state.scoreDec = scoreSpread > 0.05 ? 2 : scoreSpread > 0.005 ? 3 : 4;
                 state.selectedId = state.best.id;
                 state.currentProgram = state.best;
 
@@ -1185,8 +1264,7 @@
                 const meta = data.metadata || {};
                 const cfg = meta.config || {};
                 const model = cfg.llmModel || 'unknown model';
-                const runId = meta.runId || (runFile ? runFile.name.replace(/\.json$/i, '') : null);
-                $('#navLoadedHint').style.display = 'none';
+                const runId = meta.runId || (runFile ? runFile.name.replace(/\.(json|jsonl)$/i, '') : null);
                 $('#navMeta').innerHTML =
                     `<span class="chip"><i class="fas fa-robot"></i><span class="chip-model" title="${esc(model)}">${esc(model)}</span></span>` +
                     (runId ? `<span class="chip chip-accent"><i class="fas fa-tag"></i><span title="${esc(runId)}">${esc(String(runId).slice(0, 26))}</span></span>` : '');
@@ -1210,7 +1288,7 @@
                     <div class="hero-stat">
                         <span class="label"><i class="fas fa-trophy"></i> Winner score</span>
                         <div class="value">${fmt.score(state.best?.fitness?.finalScore)}</div>
-                        <div class="detail">iter ${esc(state.best?.iteration ?? '—')} · quality ${fmt.score(state.best?.fitness?.qualityScore, 2)} · eff ${fmt.score(state.best?.fitness?.efficiencyScore, 2)}</div>
+                        <div class="detail">iter ${esc(state.best?.iteration ?? '—')} · quality ${fmt.score(state.best?.fitness?.qualityScore, state.scoreDec)} · eff ${fmt.score(state.best?.fitness?.efficiencyScore, state.scoreDec)}</div>
                     </div>
                     <div class="hero-stat">
                         <span class="label"><i class="fas fa-arrow-trend-up"></i> vs baseline</span>
@@ -1260,7 +1338,7 @@
                     const pillCls = status + (selected ? ' selected' : '');
                     const delta = node.deltaPct;
                     const title = `iter ${node.iteration} · id ${node.id}` +
-                        (delta !== null ? ` · ${delta >= 0 ? '+' : '−'}${Math.abs(delta).toFixed(1)}% vs parent` : '');
+                        (delta !== null ? ` · ${fmt.pct(delta)} vs parent` : '');
 
                     const caret = `<button class="tn-caret${collapsed ? '' : ' opened'}" data-node="${esc(node.id)}"
                         ${children.length ? '' : 'disabled'}
@@ -1271,7 +1349,7 @@
                         <div class="tn-row">${caret}
                             <span class="tn-pill ${pillCls}" data-pid="${esc(node.id)}" role="treeitem" aria-selected="${selected}" tabindex="0" title="${esc(title)}">
                                 <span class="tn-iter">Iter ${esc(node.iteration)} ${STATUS_ICONS[status]}</span>
-                                <span class="tn-score">${fmt.score(node.fitness?.finalScore, 2)}${delta !== null ? ` · ${delta >= 0 ? '▲' : '▼'}${Math.abs(delta).toFixed(0)}%` : ''}</span>
+                                <span class="tn-score">${fmt.score(node.fitness?.finalScore, state.scoreDec)}${delta !== null ? ` · ${delta >= 0 ? '▲' : '▼'}${fmt.pctRaw(delta)}` : ''}</span>
                             </span>
                         </div>
                         ${children.length ? `<ul${collapsed ? ' style="display:none"' : ''}>${renderNodes(children, depth + 1)}</ul>` : ''}
@@ -1345,7 +1423,7 @@
                     return `<li class="pl-item${program.id === state.selectedId ? ' selected' : ''}" data-pid="${esc(program.id)}" role="option" aria-selected="${program.id === state.selectedId}" tabindex="0">
                         <span class="pl-status ${status === 'none' ? '' : status}">${STATUS_ICONS[status]}</span>
                         <span class="pl-iter">Iter ${esc(program.iteration)}</span>
-                        <span class="pl-score">${fmt.score(program.fitness?.finalScore, 2)}</span>
+                        <span class="pl-score">${fmt.score(program.fitness?.finalScore, state.scoreDec)}</span>
                     </li>`;
                 }).join('') + `<li class="list-note">${state.listSearch || state.listFilter !== 'all' ? 'Filters active' : `${state.programs.length} programs`}</li>`
                     : '<li class="placeholder" style="padding:.9rem .5rem">No programs match this filter.</li>';
@@ -1417,7 +1495,7 @@
                     const label = (status === 'best' || i % labelEvery === 0)
                         ? `<text class="chart-label" x="${x + bw / 2}" y="${H - 7}" text-anchor="middle">${esc(program.iteration)}</text>` : '';
                     const valueLabel = status === 'best'
-                        ? `<text class="chart-val" x="${x + bw / 2}" y="${y - 5}" text-anchor="middle">${fmt.score(score, 2)}</text>` : '';
+                        ? `<text class="chart-val" x="${x + bw / 2}" y="${y - 5}" text-anchor="middle">${fmt.score(score, state.scoreDec)}</text>` : '';
                     svgParts.push(
                         `<g class="chart-bar${sel}" data-pid="${esc(program.id)}" tabindex="-1">
                             <title>Iter ${esc(program.iteration)} — score ${fmt.score(score)}${program.deltaPct !== null ? ` (${fmt.pct(program.deltaPct)} vs parent)` : ''}</title>
@@ -1525,7 +1603,7 @@
             function ring(pct, color) {
                 const p = Math.max(0, Math.min(100, pct));
                 return `<span class="ring-circle" style="background:conic-gradient(${color} ${p}%, rgba(255,255,255,.07) 0)">
-                    <span>${fmt.score(pct / 100, 2)}</span></span>`;
+                    <span>${fmt.score(pct / 100, state.scoreDec)}</span></span>`;
             }
 
             function linesOf(source) {
@@ -1957,7 +2035,7 @@
                         <path d="${path}" fill="none" stroke="#3b82f6" stroke-width="1.6" opacity=".8"/>
                         <circle cx="${pts[bestIdx][0].toFixed(1)}" cy="${pts[bestIdx][1].toFixed(1)}" r="3" fill="#10b981"/>
                     </svg>
-                    <div style="font-size:.66rem;color:var(--text-3);margin-top:.2rem">score trend · range ${fmt.score(lo, 3)} – ${fmt.score(hi, 3)}</div>
+                    <div style="font-size:.66rem;color:var(--text-3);margin-top:.2rem">score trend · range ${fmt.score(lo, state.scoreDec)} – ${fmt.score(hi, state.scoreDec)}</div>
                 </div>`;
 
                 el.innerHTML = `
@@ -1974,11 +2052,11 @@
                         </div>
                         <div class="stat-tile">
                             <span class="st-label"><i class="fas fa-calculator"></i> Avg quality</span>
-                            <div class="st-value">${fmt.score(avg('qualityScore'), 3)}</div>
+                            <div class="st-value">${fmt.score(avg('qualityScore'), state.scoreDec)}</div>
                         </div>
                         <div class="stat-tile">
                             <span class="st-label"><i class="fas fa-tachometer-alt"></i> Avg efficiency</span>
-                            <div class="st-value">${fmt.score(avg('efficiencyScore'), 3)}</div>
+                            <div class="st-value">${fmt.score(avg('efficiencyScore'), state.scoreDec)}</div>
                         </div>
                         <div class="stat-tile">
                             <span class="st-label"><i class="fas fa-stopwatch"></i> Best exec time</span>

@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "goal": "Take the Absurdity Campaign I winning quicksort (3-way Dutch-national-flag partitioning, ninther pivot selection, insertion cutoff 24, smaller-side-first iterative stack, introsort heap fallback; run-2026-10-30T22-41-39-963Z-fe60ecf9 winner, 3.595 ms median on the 50k mixed-pattern benchmark, itself evolved from the legacy run-2025-12-11_21-27-18 winner) to even more absurd speeds while preserving exact sorted-output behavior. Efficiency scores are RELATIVE: the baseline anchor is this seed's median, parity scores 0.5, so every real speedup moves the needle. Explore: branchless partition loops with predicated moves, partition-block scanning (BitBoards-style 8-element block partitioning), vectorization-friendly layouts, cache-aware pivot schemes, tuning the insertion cutoff for V8's JIT, assembled small-range sorting, stream partitioning for the sequential stack phase, and killing the heap-fallback cost via deterministic pseudo-random pivot jitter that preserves O(n log n) on adversarial inputs. Algorithmic wins dominate; the legacy run proved Int32Array stacks and manual swap inlining are traps under V8. Constraints: no built-in Array.prototype.sort, in-place destructive sorting, must handle negatives, floats, heavy duplicates, and adversarial orderings (sorted, reversed, sawtooth, all-equal) fast.",
+  "files": ["examples/absurd2_sort_target.ts"],
+  "correctness": {
+    "command": "./node_modules/.bin/jest",
+    "args": ["--runInBand", "--cache=false", "{workspace}/examples/absurd2_sort_benchmark.test.ts"]
+  },
+  "benchmark": {
+    "command": "./node_modules/.bin/ts-node",
+    "args": ["{workspace}/examples/absurd2_sort_benchmark_command.ts"],
+    "warmupRuns": 1,
+    "sampleRuns": 6
+  },
+  "iterations": 12,
+  "evaluationRepeats": 1,
+  "timeoutMs": 180000,
+  "minImprovement": 0,
+  "noiseToleranceMultiplier": 1,
+  "scoreWeights": { "quality": 0.4, "efficiency": 0.6 },
+  "scoreMode": "relative",
+  "allowNetwork": false,
+  "sandbox": true
+}
